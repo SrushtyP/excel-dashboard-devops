@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Excel Dashboard Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="hero">
+        <div class="upload-card">
+            <div class="logo">📊</div>
+            <h1>Excel Dashboard Generator</h1>
+            <p class="subtitle">Upload your Excel or CSV file and get a beautiful dashboard instantly</p>
+            {% if error %}<div class="error-msg">⚠️ {{ error }}</div>{% endif %}
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <div class="drop-zone" id="dropZone">
+                    <input type="file" name="file" id="fileInput" accept=".xlsx,.xls,.csv" required>
+                    <div class="drop-content">
+                        <span class="drop-icon">📁</span>
+                        <p>Drag & drop your file here or <label for="fileInput" class="browse-link">browse</label></p>
+                        <p class="file-types">Supports: .xlsx, .xls, .csv</p>
+                    </div>
+                </div>
+                <div id="fileName" class="file-name"></div>
+                <button type="submit" class="btn-generate">Generate Dashboard ✨</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDiv = document.getElementById('fileName');
+        fileInput.addEventListener('change', () => {
+            fileNameDiv.textContent = fileInput.files[0]?.name || '';
+        });
+    </script>
+</body>
+</html>

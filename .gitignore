@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.env
+venv/
+app/uploads/
+.DS_Store
+Thumbs.db
+.vscode/
+terraform/terraform.tfvars
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
