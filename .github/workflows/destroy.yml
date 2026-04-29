@@ -58,4 +58,4 @@ jobs:
       - name: Done
         run: |
           echo "All Azure infrastructure destroyed successfully."
-          echo "To redeploy push any commit to main branch."
+          echo "To redeploy: push any commit to main branch."
