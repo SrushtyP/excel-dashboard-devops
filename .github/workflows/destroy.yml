@@ -1,0 +1,61 @@
+name: Destroy Azure Infrastructure
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DESTROY to confirm'
+        required: true
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
+            echo "You must type DESTROY to confirm. Aborting."
+            exit 1
+          fi
+          echo "Confirmed. Proceeding with destroy."
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.9
+
+      - name: Create tfvars
+        run: |
+          echo "subscription_id = \"${{ secrets.AZURE_SUBSCRIPTION_ID }}\"" > terraform/terraform.tfvars
+          echo "client_id = \"${{ secrets.AZURE_CLIENT_ID }}\"" >> terraform/terraform.tfvars
+          echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
+          echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
+          echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: terraform init
+
+      - name: Terraform Destroy
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+
+      - name: Done
+        run: |
+          echo "All Azure infrastructure destroyed successfully."
+          echo "To redeploy push any commit to main branch."
