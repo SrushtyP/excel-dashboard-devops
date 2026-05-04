@@ -23,9 +23,12 @@ def upload():
     file.save(filepath)
 
     if file.filename.endswith('.csv'):
-        df = pd.read_csv(filepath)
+        df = pd.read_csv(filepath, na_values=['', ' '])
     else:
-        df = pd.read_excel(filepath)
+        df = pd.read_excel(filepath, na_values=['', ' '])
+
+    # Drop completely empty rows
+    df = df.dropna(how='all')
 
     rows, cols = df.shape
     columns = df.columns.tolist()
