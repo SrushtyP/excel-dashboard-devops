@@ -17,52 +17,95 @@ def index():
 def upload():
     file = request.files.get('file')
     if not file or not file.filename.endswith(('.xlsx', '.xls', '.csv')):
-        return render_template('index.html', error='Please upload a valid Excel or CSV file.')
+        return render_template('index.html', error="Please upload a valid Excel or CSV file.")
 
     filepath = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(filepath)
 
+    # Read file — treat empty strings as NaN
     if file.filename.endswith('.csv'):
         df = pd.read_csv(filepath, na_values=['', ' '])
     else:
         df = pd.read_excel(filepath, na_values=['', ' '])
 
-    # Drop completely empty rows
+    # Drop rows where ALL values are NaN
     df = df.dropna(how='all')
 
     rows, cols = df.shape
     columns = df.columns.tolist()
     preview = df.head(5).to_html(classes='preview-table', index=False)
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
+
+    # Get numeric columns that have at least some real data
+    numeric_cols = [
+        col for col in df.select_dtypes(include='number').columns
+        if df[col].notna().sum() > 0
+    ]
+
+    # Get date/string column for x-axis if available
+    str_cols = df.select_dtypes(exclude='number').columns.tolist()
+    x_col = str_cols[0] if str_cols else None
+
     charts = []
 
     if len(numeric_cols) >= 1:
-        fig1 = px.bar(df.head(20), y=numeric_cols[0],
-                      title=f'{numeric_cols[0]} — Bar Chart',
-                      template='plotly_white',
-                      color_discrete_sequence=['#6C63FF'])
+        col = numeric_cols[0]
+        # Drop NaN for this specific column before plotting
+        plot_df = df[[x_col, col]].dropna() if x_col else df[[col]].dropna()
+
+        fig1 = px.bar(
+            plot_df,
+            x=x_col,
+            y=col,
+            title=f'{col} — Bar Chart',
+            template='plotly_white',
+            color_discrete_sequence=['#6C63FF']
+        )
+        fig1.update_xaxes(tickangle=45)
         charts.append(json.dumps(fig1, cls=plotly.utils.PlotlyJSONEncoder))
 
     if len(numeric_cols) >= 2:
-        fig2 = px.scatter(df.head(50), x=numeric_cols[0], y=numeric_cols[1],
-                          title=f'{numeric_cols[0]} vs {numeric_cols[1]}',
-                          template='plotly_white',
-                          color_discrete_sequence=['#FF6584'])
+        col1, col2 = numeric_cols[0], numeric_cols[1]
+        plot_df = df[[col1, col2]].dropna()
+
+        fig2 = px.scatter(
+            plot_df,
+            x=col1,
+            y=col2,
+            title=f'{col1} vs {col2}',
+            template='plotly_white',
+            color_discrete_sequence=['#FF6584']
+        )
         charts.append(json.dumps(fig2, cls=plotly.utils.PlotlyJSONEncoder))
 
     if len(numeric_cols) >= 1:
-        fig3 = px.line(df.head(30), y=numeric_cols[0],
-                       title=f'{numeric_cols[0]} — Trend Line',
-                       template='plotly_white',
-                       color_discrete_sequence=['#43C59E'])
+        col = numeric_cols[0]
+        plot_df = df[[x_col, col]].dropna() if x_col else df[[col]].dropna()
+
+        fig3 = px.line(
+            plot_df,
+            x=x_col,
+            y=col,
+            title=f'{col} — Trend Line',
+            template='plotly_white',
+            color_discrete_sequence=['#43C59E'],
+            markers=True
+        )
+        fig3.update_xaxes(tickangle=45)
         charts.append(json.dumps(fig3, cls=plotly.utils.PlotlyJSONEncoder))
 
-    non_numeric = df.select_dtypes(exclude='number').columns.tolist()
-    if non_numeric and len(numeric_cols) >= 1:
-        pie_data = df.groupby(non_numeric[0])[numeric_cols[0]].sum().reset_index().head(8)
-        fig4 = px.pie(pie_data, names=non_numeric[0], values=numeric_cols[0],
-                      title=f'{numeric_cols[0]} by {non_numeric[0]}',
-                      template='plotly_white')
+    # Pie chart — group by first string column
+    if x_col and len(numeric_cols) >= 1:
+        col = numeric_cols[0]
+        plot_df = df[[x_col, col]].dropna()
+        pie_data = plot_df.groupby(x_col)[col].sum().reset_index().head(10)
+
+        fig4 = px.pie(
+            pie_data,
+            names=x_col,
+            values=col,
+            title=f'{col} by {x_col}',
+            template='plotly_white'
+        )
         charts.append(json.dumps(fig4, cls=plotly.utils.PlotlyJSONEncoder))
 
     return render_template('dashboard.html',
