@@ -1,21 +1,12 @@
 from flask import Flask, render_template, jsonify, request
 import json
 import os
-import subprocess
 import threading
 
 app = Flask(__name__)
 
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 INVENTORY_PATH = os.path.join(BASE_DIR, '..', 'inventory', 'inventory.json')
-TERRAFORM_DIR  = os.path.join(BASE_DIR, '..', 'terraform')
-ANSIBLE_DIR    = os.path.join(BASE_DIR, '..', 'ansible')
-
-PLAYBOOK_MAP = {
-    "running" : "playbook-running.yml",
-    "snoozed" : "playbook-snooze.yml",
-    "destroyed": "playbook-destroy.yml"
-}
 
 job_logs = {}
 
@@ -35,44 +26,18 @@ def run_job(vm_id, vm_name, action):
         logs.append(msg)
 
     try:
-        # Step 1 — Terraform
-        log(f"Starting Terraform for {vm_name} -> {action.upper()}")
-        tf_cmd = [
-            "terraform", "apply", "-auto-approve",
-            "-var-file=terraform.tfvars"
-        ]
-        tf = subprocess.run(tf_cmd, cwd=TERRAFORM_DIR,
-                            capture_output=True, text=True)
-        log(tf.stdout)
-        if tf.returncode != 0:
-            log(f"Terraform failed: {tf.stderr}")
-            job_logs[vm_id]["status"] = "failed"
-            return
-        log("Terraform complete")
+        log(f"Processing request: {vm_name} -> {action.upper()}")
+        log(f"Updating inventory state...")
 
-        # Step 2 — Ansible
-        playbook_file = PLAYBOOK_MAP.get(action)
-        if playbook_file:
-            log(f"Starting Ansible playbook: {playbook_file}")
-            playbook  = os.path.join(ANSIBLE_DIR, playbook_file)
-            inventory = os.path.join(ANSIBLE_DIR, "inventory.ini")
-            ans_cmd   = ["ansible-playbook", "-i", inventory, playbook]
-            ans = subprocess.run(ans_cmd, capture_output=True, text=True)
-            log(ans.stdout)
-            if ans.returncode != 0:
-                log(f"Ansible failed: {ans.stderr}")
-                job_logs[vm_id]["status"] = "failed"
-                return
-            log("Ansible complete")
-
-        # Step 3 — Update inventory
         data = load_inventory()
         for vm in data["vms"]:
             if vm["id"] == vm_id:
                 vm["desired_state"] = action
         save_inventory(data)
 
-        log(f"VM {vm_name} successfully set to {action.upper()}")
+        log(f"Inventory updated successfully.")
+        log(f"VM '{vm_name}' desired state set to {action.upper()}.")
+        log(f"To provision this change on Azure, push a commit to trigger the GitHub Actions pipeline.")
         job_logs[vm_id]["status"] = "done"
 
     except Exception as e:
@@ -105,7 +70,7 @@ def invoke_vm():
 
     if not vm:
         return jsonify({"error": "VM not found"}), 404
-    if action not in PLAYBOOK_MAP:
+    if action not in ["running", "snoozed", "destroyed"]:
         return jsonify({"error": "Invalid action"}), 400
 
     thread = threading.Thread(
