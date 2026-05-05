@@ -1,4 +1,4 @@
----
+﻿---
 - name: Deploy Excel Dashboard App
   hosts: webservers
   become: yes
@@ -50,6 +50,19 @@
       copy:
         src: ../app/static/
         dest: "{{ app_dir }}/static/"
+        owner: "{{ app_user }}"
+
+    - name: Create inventory directory
+      file:
+        path: "{{ app_dir }}/../inventory"
+        state: directory
+        owner: "{{ app_user }}"
+        mode: '0755'
+
+    - name: Copy inventory folder
+      copy:
+        src: ../inventory/
+        dest: "{{ app_dir }}/../inventory/"
         owner: "{{ app_user }}"
 
     - name: Copy requirements.txt
