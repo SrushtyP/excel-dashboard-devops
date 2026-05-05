@@ -1,0 +1,86 @@
+{
+  "company": "ChemCore International",
+  "project": "Information Management Platform",
+  "last_updated": "2026-05-05",
+  "total_cost_summary": {
+    "monthly_unoptimized_inr": 21600,
+    "monthly_optimized_inr": 9216,
+    "monthly_savings_inr": 12384,
+    "savings_percent": 57,
+    "credit_total_inr": 16000,
+    "credit_used_inr": 3200,
+    "runway_unoptimized_days": 22,
+    "runway_optimized_days": 52
+  },
+  "vms": [
+    {
+      "id": "vm-running",
+      "alias": "Compliance reporting portal",
+      "name": "vm-running",
+      "desired_state": "running",
+      "environment": "production",
+      "business_unit": "Global Compliance",
+      "priority": "critical",
+      "contact": "compliance-team@chemcore.com",
+      "business_need": "24/7 availability for regulatory bodies across 82 countries. Hosts the live Excel Dashboard app for client demos.",
+      "specs": {
+        "cpu": 2,
+        "memory_gb": 8,
+        "disk_gb": 30,
+        "vm_size": "Standard_D2s_v3"
+      },
+      "cost": {
+        "hourly_inr": 7.18,
+        "monthly_inr": 5250,
+        "optimized_monthly_inr": 5250,
+        "savings_inr": 0
+      }
+    },
+    {
+      "id": "vm-snoozed",
+      "alias": "Mumbai R&D lab",
+      "name": "vm-snoozed",
+      "desired_state": "snoozed",
+      "environment": "staging",
+      "business_unit": "R&D Mumbai",
+      "priority": "medium",
+      "contact": "rnd-mumbai@chemcore.com",
+      "business_need": "Active 8am-8pm IST weekdays only. Snoozed overnight and weekends. Saves 57% vs always-on.",
+      "specs": {
+        "cpu": 2,
+        "memory_gb": 8,
+        "disk_gb": 30,
+        "vm_size": "Standard_D2s_v3"
+      },
+      "cost": {
+        "hourly_inr": 7.18,
+        "monthly_inr": 5250,
+        "optimized_monthly_inr": 1966,
+        "savings_inr": 3284
+      }
+    },
+    {
+      "id": "vm-destroyed",
+      "alias": "CPCB audit generator",
+      "name": "vm-destroyed",
+      "desired_state": "destroyed",
+      "environment": "ephemeral",
+      "business_unit": "India Audit Team",
+      "priority": "low",
+      "contact": "audit-team@chemcore.com",
+      "business_need": "Ephemeral compute for India CPCB hazardous waste compliance report. Enabled only during audit window then destroyed.",
+      "specs": {
+        "cpu": 2,
+        "memory_gb": 8,
+        "disk_gb": 30,
+        "vm_size": "Standard_D2s_v3"
+      },
+      "cost": {
+        "hourly_inr": 7.18,
+        "monthly_inr": 5250,
+        "optimized_monthly_inr": 0,
+        "savings_inr": 5250
+      }
+    }
+  ]
+}

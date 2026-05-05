@@ -1,37 +1,265 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Excel Dashboard Generator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VM Lifecycle Dashboard — ChemCore International</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="hero">
-        <div class="upload-card">
-            <div class="logo">📊</div>
-            <h1>Excel Dashboard Generator</h1>
-            <p class="subtitle">Upload your Excel or CSV file and get a beautiful dashboard instantly</p>
-            {% if error %}<div class="error-msg">⚠️ {{ error }}</div>{% endif %}
-            <form action="/upload" method="POST" enctype="multipart/form-data">
-                <div class="drop-zone" id="dropZone">
-                    <input type="file" name="file" id="fileInput" accept=".xlsx,.xls,.csv" required>
-                    <div class="drop-content">
-                        <span class="drop-icon">📁</span>
-                        <p>Drag & drop your file here or <label for="fileInput" class="browse-link">browse</label></p>
-                        <p class="file-types">Supports: .xlsx, .xls, .csv</p>
-                    </div>
-                </div>
-                <div id="fileName" class="file-name"></div>
-                <button type="submit" class="btn-generate">Generate Dashboard ✨</button>
-            </form>
-        </div>
+<div class="app">
+
+  <div class="header">
+    <div>
+      <h1>VM Lifecycle Dashboard</h1>
+      <p>Azure &middot; centralus &middot; Standard_D2s_v3 &middot; ChemCore International</p>
     </div>
-    <script>
-        const fileInput = document.getElementById('fileInput');
-        const fileNameDiv = document.getElementById('fileName');
-        fileInput.addEventListener('change', () => {
-            fileNameDiv.textContent = fileInput.files[0]?.name || '';
-        });
-    </script>
+    <span class="badge badge-info">Free Tier &middot; &#8377;16,000 credit</span>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi">
+      <div class="kpi-label">Monthly (all running)</div>
+      <div class="kpi-value red" id="kpiUnopt">—</div>
+      <div class="kpi-sub">3 VMs &times; Standard_D2s_v3</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Monthly (optimized)</div>
+      <div class="kpi-value green" id="kpiOpt">—</div>
+      <div class="kpi-sub">snooze + destroy applied</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Monthly savings</div>
+      <div class="kpi-value green" id="kpiSavings">—</div>
+      <div class="kpi-sub" id="kpiSavingsPct">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Credit runway</div>
+      <div class="kpi-value red" id="kpiRunway">—</div>
+      <div class="kpi-sub" id="kpiRunwaySub">—</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">VM Inventory</div>
+      <div id="vmList"></div>
+    </div>
+
+    <div class="right-panel">
+      <div class="panel">
+        <div id="emptyState" class="empty-state">Select a VM to view details</div>
+        <div id="vmDetail" style="display:none">
+          <div class="detail-header">
+            <div>
+              <div class="detail-title" id="detailTitle"></div>
+              <div class="detail-need" id="detailNeed"></div>
+            </div>
+            <span class="badge" id="detailBadge"></span>
+          </div>
+          <div class="specs-grid" id="specsGrid"></div>
+          <hr class="sep"/>
+          <div class="panel-title">Cost Breakdown</div>
+          <div id="costRows"></div>
+          <hr class="sep"/>
+          <div class="panel-title">Change VM State</div>
+          <div class="action-buttons" id="actionButtons">
+            <button class="action-btn" data-action="running">▶ Running</button>
+            <button class="action-btn" data-action="snoozed">⏸ Snooze</button>
+            <button class="action-btn" data-action="destroyed">✕ Destroy</button>
+          </div>
+          <div class="invoke-row">
+            <button class="invoke-btn" id="invokeBtn" disabled>Invoke VM</button>
+          </div>
+          <div id="logSection" style="display:none;margin-top:1rem">
+            <div class="panel-title">Execution Log</div>
+            <div class="log-box" id="logBox"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Monthly Cost by VM State</div>
+        <div id="costBars"></div>
+        <hr class="sep"/>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;color:#6b6b6b">Free credit used</span>
+          <span style="font-size:12px;font-weight:500" id="creditLabel">&#8377;3,200 / &#8377;16,000</span>
+        </div>
+        <div class="credit-track">
+          <div class="credit-fill" id="creditFill" style="width:20%"></div>
+        </div>
+        <div style="font-size:11px;color:#6b6b6b;margin-top:4px" id="creditNote">
+          Optimized spend extends runway from 22 days &rarr; 52 days
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const stateColors = { running:"badge-success", snoozed:"badge-gray", destroyed:"badge-danger" };
+const dotClass    = { running:"dot-running", snoozed:"dot-snoozed", destroyed:"dot-destroyed" };
+const costDefs    = {
+  running:   [["Hourly rate","&#8377;7.18",""],["Monthly cost","&#8377;5,250",""],["Billing status","Full compute billing",""],["Justification","Always-on — 82 country compliance",""]],
+  snoozed:   [["Always-on cost","&#8377;5,250/mo",""],["Snoozed cost","&#8377;1,966/mo","savings"],["Monthly savings","&#8377;3,284/mo","savings"],["Schedule","8am–8pm IST · weekdays only",""]],
+  destroyed: [["Current cost","&#8377;0/mo","savings"],["If always-on","&#8377;5,250/mo","extra"],["Monthly savings","&#8377;5,250/mo","savings"],["Annual savings","&#8377;63,000","savings"]]
+};
+
+let vms = [], selectedVM = null, selectedAction = null, polling = null;
+
+async function loadInventory() {
+  try {
+    const r = await fetch("/api/vms");
+    const d = await r.json();
+    vms = d.vms;
+    renderVMList();
+    loadSummary();
+  } catch(e) {
+    document.getElementById("vmList").innerHTML =
+      "<p style='color:#a32d2d;font-size:13px;padding:8px'>Could not load inventory. Is Flask running?</p>";
+  }
+}
+
+async function loadSummary() {
+  try {
+    const r = await fetch("/api/summary");
+    const s = await r.json();
+    document.getElementById("kpiUnopt").innerHTML   = "&#8377;" + s.monthly_unoptimized_inr.toLocaleString('en-IN');
+    document.getElementById("kpiOpt").innerHTML     = "&#8377;" + s.monthly_optimized_inr.toLocaleString('en-IN');
+    document.getElementById("kpiSavings").innerHTML = "&#8377;" + s.monthly_savings_inr.toLocaleString('en-IN');
+    document.getElementById("kpiSavingsPct").textContent = s.savings_percent + "% cost reduction";
+    document.getElementById("kpiRunway").textContent = s.runway_unoptimized_days + " days";
+    document.getElementById("kpiRunwaySub").textContent  = "unoptimized → " + s.runway_optimized_days + " days optimized";
+    const pct = Math.round(s.credit_used_inr / s.credit_total_inr * 100);
+    document.getElementById("creditFill").style.width = pct + "%";
+    document.getElementById("creditLabel").innerHTML  = "&#8377;" + s.credit_used_inr.toLocaleString('en-IN') + " / &#8377;" + s.credit_total_inr.toLocaleString('en-IN');
+    document.getElementById("creditNote").textContent = "Optimized spend extends runway from " + s.runway_unoptimized_days + " days → " + s.runway_optimized_days + " days";
+  } catch(e) {}
+}
+
+function renderVMList() {
+  document.getElementById("vmList").innerHTML = vms.map(vm => `
+    <div class="vm-card" id="card-${vm.id}" onclick="selectVM('${vm.id}')">
+      <div class="vm-card-top">
+        <span class="vm-name"><span class="status-dot ${dotClass[vm.desired_state]}"></span>${vm.alias}</span>
+        <span class="badge ${stateColors[vm.desired_state]}">${vm.desired_state}</span>
+      </div>
+      <div class="vm-alias">${vm.name} &middot; ${vm.environment}</div>
+      <div class="vm-meta">${vm.business_unit} &middot; ${vm.priority} priority</div>
+    </div>
+  `).join("");
+}
+
+function selectVM(id) {
+  selectedVM     = vms.find(v => v.id === id);
+  selectedAction = selectedVM.desired_state;
+  document.querySelectorAll(".vm-card").forEach(c => c.classList.remove("selected"));
+  document.getElementById("card-" + id).classList.add("selected");
+  renderDetail();
+}
+
+function renderDetail() {
+  const vm = selectedVM;
+  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("vmDetail").style.display   = "block";
+  document.getElementById("detailTitle").textContent  = vm.alias;
+  document.getElementById("detailNeed").textContent   = vm.business_need;
+  const badge = document.getElementById("detailBadge");
+  badge.textContent = vm.environment;
+  badge.className   = "badge " + (vm.environment === "production" ? "badge-danger" : vm.environment === "staging" ? "badge-warning" : "badge-gray");
+  const s = vm.specs;
+  document.getElementById("specsGrid").innerHTML = `
+    <div class="spec-item"><div class="spec-label">CPU</div><div class="spec-value">${s.cpu} vCPU</div></div>
+    <div class="spec-item"><div class="spec-label">Memory</div><div class="spec-value">${s.memory_gb} GB</div></div>
+    <div class="spec-item"><div class="spec-label">Disk</div><div class="spec-value">${s.disk_gb} GB</div></div>
+    <div class="spec-item"><div class="spec-label">Size</div><div class="spec-value">${s.vm_size}</div></div>
+  `;
+  document.querySelectorAll(".action-btn").forEach(b =>
+    b.classList.toggle("active-action", b.dataset.action === selectedAction)
+  );
+  renderCost();
+  document.getElementById("invokeBtn").disabled = false;
+  document.getElementById("logSection").style.display = "none";
+}
+
+function renderCost() {
+  const rows = costDefs[selectedAction] || costDefs["running"];
+  document.getElementById("costRows").innerHTML = rows.map(([label, val, cls]) =>
+    `<div class="cost-row"><span class="cost-label">${label}</span><span class="cost-amount ${cls}">${val}</span></div>`
+  ).join("");
+}
+
+function renderBars() {
+  const bars = [
+    { label:"Running",   monthly:5250, color:"#3B6D11", pct:100 },
+    { label:"Snoozed",   monthly:1966, color:"#888780", pct:37  },
+    { label:"Destroyed", monthly:0,    color:"#A32D2D", pct:0   }
+  ];
+  document.getElementById("costBars").innerHTML = bars.map(b => `
+    <div class="bar-row">
+      <span class="bar-label">${b.label}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${b.pct}%;background:${b.color}"></div></div>
+      <span class="bar-amount">&#8377;${b.monthly.toLocaleString('en-IN')}/mo</span>
+    </div>
+  `).join("");
+}
+
+document.getElementById("actionButtons").addEventListener("click", e => {
+  const btn = e.target.closest(".action-btn");
+  if (!btn || !selectedVM) return;
+  selectedAction = btn.dataset.action;
+  document.querySelectorAll(".action-btn").forEach(b =>
+    b.classList.toggle("active-action", b === btn)
+  );
+  renderCost();
+});
+
+document.getElementById("invokeBtn").addEventListener("click", async () => {
+  if (!selectedVM) return;
+  const btn        = document.getElementById("invokeBtn");
+  const logSection = document.getElementById("logSection");
+  const logBox     = document.getElementById("logBox");
+
+  btn.disabled      = true;
+  btn.textContent   = "Invoking...";
+  logSection.style.display = "block";
+  logBox.textContent = "";
+
+  try {
+    const res  = await fetch("/api/invoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vm_id: selectedVM.id, action: selectedAction })
+    });
+    const data = await res.json();
+    logBox.textContent = "> " + data.message + "\n";
+
+    polling = setInterval(async () => {
+      const s = await fetch("/api/status/" + selectedVM.id);
+      const j = await s.json();
+      logBox.textContent = j.logs.join("\n");
+      logBox.scrollTop   = logBox.scrollHeight;
+
+      if (j.status === "done" || j.status === "failed") {
+        clearInterval(polling);
+        btn.disabled    = false;
+        btn.textContent = "Invoke VM";
+        selectedVM.desired_state = selectedAction;
+        renderVMList();
+        document.getElementById("card-" + selectedVM.id).classList.add("selected");
+      }
+    }, 1500);
+
+  } catch(e) {
+    logBox.textContent = "> Error: Could not reach Flask API.";
+    btn.disabled    = false;
+    btn.textContent = "Invoke VM";
+  }
+});
+
+loadInventory();
+renderBars();
+</script>
 </body>
 </html>
