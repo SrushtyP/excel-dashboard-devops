@@ -77,6 +77,31 @@ jobs:
       - name: Run Ansible Playbook
         run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
 
+      - name: Run state playbooks per VM
+        run: |
+          while IFS= read -r line; do
+            VM_ID=$(echo "$line" | cut -d'|' -f1)
+            STATE=$(echo "$line" | cut -d'|' -f2)
+            echo "VM: $VM_ID -> $STATE"
+            case "$STATE" in
+              running)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml
+                ;;
+              snoozed)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-snooze.yml
+                ;;
+              destroyed)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-destroy.yml
+                ;;
+            esac
+          done < <(python3 -c "
+          import json
+          with open('inventory/inventory.json') as f:
+              d = json.load(f)
+          for vm in d['vms']:
+              print(vm['id'] + '|' + vm['desired_state'])
+          ")
+
       - name: Verify deployment
         run: |
           sleep 10
