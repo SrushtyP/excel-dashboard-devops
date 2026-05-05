@@ -1,101 +1,89 @@
----
-- name: Deploy Excel Dashboard App
-  hosts: webservers
-  become: yes
-  vars:
-    app_dir: /opt/dashboard-app
-    app_user: azureuser
+name: Deploy Excel Dashboard to Azure
+on:
+  push:
+    branches:
+      - main
 
-  tasks:
-    - name: Update apt packages
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-    - name: Install Python3 and pip
-      apt:
-        name:
-          - python3
-          - python3-pip
-          - python3-venv
-        state: present
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Create app directory
-      file:
-        path: "{{ app_dir }}"
-        state: directory
-        owner: "{{ app_user }}"
-        mode: '0755'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.9
 
-    - name: Create uploads directory
-      file:
-        path: "{{ app_dir }}/uploads"
-        state: directory
-        owner: "{{ app_user }}"
-        mode: '0755'
+      - name: Create tfvars
+        run: |
+          echo "subscription_id = \"${{ secrets.AZURE_SUBSCRIPTION_ID }}\"" > terraform/terraform.tfvars
+          echo "client_id = \"${{ secrets.AZURE_CLIENT_ID }}\"" >> terraform/terraform.tfvars
+          echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
+          echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
+          echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
 
-    - name: Copy app.py
-      copy:
-        src: ../app/app.py
-        dest: "{{ app_dir }}/app.py"
-        owner: "{{ app_user }}"
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: terraform init -reconfigure
 
-    - name: Copy templates folder
-      copy:
-        src: ../app/templates/
-        dest: "{{ app_dir }}/templates/"
-        owner: "{{ app_user }}"
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-    - name: Copy static folder
-      copy:
-        src: ../app/static/
-        dest: "{{ app_dir }}/static/"
-        owner: "{{ app_user }}"
+      - name: Get VM IP from Terraform
+        id: get_ip
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: |
+          IP=$(terraform output -raw public_ip_address)
+          echo "vm_ip=$IP" >> $GITHUB_OUTPUT
+          echo "VM Public IP: $IP"
 
-    - name: Create inventory directory
-      file:
-        path: "{{ app_dir }}/../inventory"
-        state: directory
-        owner: "{{ app_user }}"
-        mode: '0755'
+      - name: Install Ansible and sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
 
-    - name: Copy inventory folder
-      copy:
-        src: ../inventory/
-        dest: "{{ app_dir }}/../inventory/"
-        owner: "{{ app_user }}"
+      - name: Create Ansible inventory
+        run: |
+          echo "[webservers]" > ansible/inventory.ini
+          echo "${{ steps.get_ip.outputs.vm_ip }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> ansible/inventory.ini
 
-    - name: Copy requirements.txt
-      copy:
-        src: ../requirements.txt
-        dest: "{{ app_dir }}/requirements.txt"
-        owner: "{{ app_user }}"
+      - name: Install Flask on VM
+        run: |
+          sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            azureuser@${{ steps.get_ip.outputs.vm_ip }} \
+            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
 
-    - name: Install Python dependencies
-      pip:
-        requirements: "{{ app_dir }}/requirements.txt"
-        executable: pip3
+      - name: Run Ansible Playbook
+        run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
 
-    - name: Kill existing Flask process
-      shell: kill $(cat /tmp/flask.pid) 2>/dev/null || true
-      ignore_errors: yes
-
-    - name: Start Flask app in background
-      shell: cd {{ app_dir }} && nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
-      args:
-        executable: /bin/bash
-
-    - name: Wait for app to start
-      wait_for:
-        port: 5000
-        host: 0.0.0.0
-        delay: 5
-        timeout: 30
-
-    - name: Confirm app is running
-      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:5000
-      register: http_status
-
-    - name: Print status
-      debug:
-        msg: "App is live! HTTP Status: {{ http_status.stdout }}"
+      - name: Verify deployment
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:5000)
+          if [ "$STATUS" = "200" ]; then
+            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:5000"
+          else
+            echo "Verification failed - Status: $STATUS"
+            exit 1
+          fi
