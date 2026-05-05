@@ -35,11 +35,14 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
           for i in 1 2 3; do
-            terraform init && break
-            echo "Retry $i failed, waiting 15s..."
-            sleep 15
+            echo "Terraform init attempt $i..."
+            terraform init -reconfigure && echo "Init succeeded" && exit 0
+            echo "Attempt $i failed, waiting 20s..."
+            sleep 20
           done
-
+          echo "All init attempts failed"
+          exit 1
+          
       - name: Terraform Apply
         working-directory: terraform
         env:
