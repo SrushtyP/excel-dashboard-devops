@@ -34,6 +34,49 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: terraform init -backend=false
 
+      - name: Terraform Import Existing Resources
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_resource_group.rg \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_virtual_network.vnet \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Network/virtualNetworks/vnet-dashboard || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_subnet.subnet \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Network/virtualNetworks/vnet-dashboard/subnets/subnet-dashboard || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_public_ip.public_ip \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Network/publicIPAddresses/pip-dashboard || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_network_security_group.nsg \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Network/networkSecurityGroups/nsg-dashboard || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_network_interface.nic \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Network/networkInterfaces/nic-dashboard || true
+
+          terraform import \
+            -var-file="terraform.tfvars" \
+            azurerm_linux_virtual_machine.vm \
+            /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-dashboard-demo/providers/Microsoft.Compute/virtualMachines/vm-dashboard || true
+
       - name: Terraform Apply
         working-directory: terraform
         env:
@@ -69,7 +112,7 @@ jobs:
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
             azureuser@${{ steps.get_ip.outputs.vm_ip }} \
-            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask pandas openpyxl plotly"
+            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
 
       - name: Run Ansible Playbook
         run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
