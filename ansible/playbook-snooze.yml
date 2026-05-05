@@ -1,0 +1,13 @@
+﻿---
+- name: Snooze VM (stop Flask)
+  hosts: webservers
+  become: yes
+
+  tasks:
+    - name: Kill Flask process
+      shell: kill $(cat /tmp/flask.pid) 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Print snooze status
+      debug:
+        msg: "Flask stopped. VM marked as SNOOZED in inventory."

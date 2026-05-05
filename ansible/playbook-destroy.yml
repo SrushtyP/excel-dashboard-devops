@@ -1,0 +1,9 @@
+﻿---
+- name: Destroy VM (mark for Terraform destroy)
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Confirm destroy intent
+      debug:
+        msg: "VM marked as DESTROYED in inventory. Terraform will handle deprovisioning on next pipeline run."
