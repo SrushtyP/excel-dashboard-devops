@@ -25,59 +25,30 @@ jobs:
           echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
           echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
 
-      - name: Terraform Init
+      - name: Terraform Init (with retry)
         working-directory: terraform
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: terraform init -backend=false
-
-      - name: Terraform Import and Apply
-        working-directory: terraform
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
-          SUB="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-          RG="rg-dashboard-demo"
+          for i in 1 2 3; do
+            terraform init && break
+            echo "Retry $i failed, waiting 15s..."
+            sleep 15
+          done
 
-          import_if_exists() {
-            RESOURCE=$1
-            ID=$2
-            echo "Importing $RESOURCE..."
-            terraform import -var-file="terraform.tfvars" "$RESOURCE" "$ID" 2>&1 && echo "Imported $RESOURCE" || echo "Skipping $RESOURCE (not found or already imported)"
-          }
-
-          import_if_exists azurerm_resource_group.rg \
-            "/subscriptions/$SUB/resourceGroups/$RG"
-
-          import_if_exists azurerm_virtual_network.vnet \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/virtualNetworks/vnet-dashboard"
-
-          import_if_exists azurerm_subnet.subnet \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/virtualNetworks/vnet-dashboard/subnets/subnet-dashboard"
-
-          import_if_exists azurerm_public_ip.public_ip \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/publicIPAddresses/pip-dashboard"
-
-          import_if_exists azurerm_network_security_group.nsg \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/networkSecurityGroups/nsg-dashboard"
-
-          import_if_exists azurerm_network_interface.nic \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/networkInterfaces/nic-dashboard"
-
-          import_if_exists azurerm_network_interface_security_group_association.nic_nsg \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/networkInterfaces/nic-dashboard|/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Network/networkSecurityGroups/nsg-dashboard"
-
-          import_if_exists azurerm_linux_virtual_machine.vm \
-            "/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Compute/virtualMachines/vm-dashboard"
-
-          echo "All imports done — running apply..."
-          terraform apply -var-file="terraform.tfvars" -auto-approve
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
       - name: Get VM IP from Terraform
         id: get_ip
@@ -87,6 +58,7 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
           IP=$(terraform output -raw public_ip_address)
           echo "vm_ip=$IP" >> $GITHUB_OUTPUT
