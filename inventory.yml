@@ -1,0 +1,57 @@
+# ============================================================
+# ChemCore International — Azure VM Inventory
+# ============================================================
+# HOW TO USE:
+#   Edit enabled: true/false to provision or destroy a VM
+#   Edit state to control VM behaviour
+#   Push to GitHub — pipeline handles everything automatically
+# ============================================================
+
+company: ChemCore International
+project: Information Management Platform
+last_updated: "2026-05-05"
+
+vms:
+
+  - name: vm-running
+    purpose: "Global Compliance Reporting Portal"
+    size: Standard_D2s_v3
+    state: running
+    enabled: true
+    snooze_schedule:
+      enabled: false
+    cost_per_hour_usd: 0.096
+    business_justification: >
+      24/7 availability for regulatory bodies across 82 countries.
+      Hosts the live Excel Dashboard app for client demos.
+    contact: compliance-team@chemcore.com
+
+  - name: vm-snoozed
+    purpose: "Mumbai R&D Lab Testing Environment"
+    size: Standard_D2s_v3
+    state: snoozed
+    enabled: true
+    snooze_schedule:
+      enabled: true
+      sleep_time: "20:00"
+      wake_time:  "08:00"
+      timezone:   "Asia/Kolkata"
+      days:       "weekdays"
+    cost_per_hour_usd: 0.096
+    business_justification: >
+      R&D lab environment. Active 8am-8pm IST weekdays only.
+      Snoozed overnight and weekends. Saves 56% vs always-on.
+    contact: rnd-mumbai@chemcore.com
+
+  - name: vm-destroyed
+    purpose: "India CPCB Annual Audit Report Generator"
+    size: Standard_D2s_v3
+    state: destroyed
+    enabled: false
+    snooze_schedule:
+      enabled: false
+    cost_per_hour_usd: 0.00
+    business_justification: >
+      Ephemeral compute for India CPCB hazardous waste compliance
+      report. Enabled only during audit window then destroyed.
+    contact: audit-team@chemcore.com

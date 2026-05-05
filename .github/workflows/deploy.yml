@@ -32,8 +32,7 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
-        run: terraform init
+        run: terraform init -backend=false
 
       - name: Terraform Apply
         working-directory: terraform
@@ -42,7 +41,6 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
       - name: Get VM IP from Terraform
@@ -53,7 +51,6 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
           IP=$(terraform output -raw public_ip_address)
           echo "vm_ip=$IP" >> $GITHUB_OUTPUT

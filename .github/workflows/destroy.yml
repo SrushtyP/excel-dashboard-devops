@@ -1,26 +1,16 @@
-name: Destroy Azure Infrastructure
+name: Deploy Excel Dashboard to Azure
 on:
-  workflow_dispatch:
-    inputs:
-      confirm:
-        description: 'Type DESTROY to confirm'
-        required: true
+  push:
+    branches:
+      - main
 
 jobs:
-  destroy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
-            echo "You must type DESTROY to confirm. Aborting."
-            exit 1
-          fi
-          echo "Confirmed. Proceeding with destroy."
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -42,20 +32,55 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
-        run: terraform init
+        run: terraform init -backend=false
 
-      - name: Terraform Destroy
+      - name: Terraform Apply
         working-directory: terraform
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-      - name: Done
+      - name: Get VM IP from Terraform
+        id: get_ip
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          echo "All Azure infrastructure destroyed successfully."
-          echo "To redeploy: push any commit to main branch."
+          IP=$(terraform output -raw public_ip_address)
+          echo "vm_ip=$IP" >> $GITHUB_OUTPUT
+          echo "VM Public IP: $IP"
+
+      - name: Install Ansible and sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
+
+      - name: Create Ansible inventory
+        run: |
+          echo "[webservers]" > ansible/inventory.ini
+          echo "${{ steps.get_ip.outputs.vm_ip }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> ansible/inventory.ini
+
+      - name: Install Flask on VM
+        run: |
+          sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            azureuser@${{ steps.get_ip.outputs.vm_ip }} \
+            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask pandas openpyxl plotly"
+
+      - name: Run Ansible Playbook
+        run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:5000)
+          if [ "$STATUS" = "200" ]; then
+            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:5000"
+          else
+            echo "Verification failed - Status: $STATUS"
+            exit 1
+          fi
