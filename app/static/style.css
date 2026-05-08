@@ -7,6 +7,12 @@ body { font-family: 'Segoe UI', sans-serif; background: #eeecea; color: #1a1a1a;
 .header h1 { font-size: 18px; font-weight: 500; }
 .header p  { font-size: 12px; color: #6b6b6b; margin-top: 2px; }
 
+/* Tabs */
+.tab-bar { display: flex; gap: 6px; margin-bottom: 1.5rem; border-bottom: 0.5px solid rgba(0,0,0,0.12); padding-bottom: 0; }
+.tab-btn { padding: 8px 20px; font-size: 13px; font-weight: 500; border: none; background: none; color: #6b6b6b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; border-radius: 0; }
+.tab-btn:hover { color: #1a1a1a; }
+.tab-btn.active { color: #185FA5; border-bottom: 2px solid #185FA5; }
+
 /* Badges */
 .badge { font-size: 11px; padding: 3px 10px; border-radius: 8px; font-weight: 500; }
 .badge-info    { background: #E6F1FB; color: #0C447C; }
@@ -88,12 +94,20 @@ body { font-family: 'Segoe UI', sans-serif; background: #eeecea; color: #1a1a1a;
 .credit-track { width: 100%; background: #f5f5f3; border-radius: 4px; height: 6px; margin: 6px 0; overflow: hidden; }
 .credit-fill  { height: 100%; border-radius: 4px; background: #3B6D11; }
 
+/* Cost Analysis Tab */
+.cost-analysis-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.chart-area { min-height: 140px; }
+.chart-area-wide { min-height: 180px; }
+.chart-loading { display: flex; align-items: center; justify-content: center; height: 140px; font-size: 13px; color: #6b6b6b; }
+.error-note { background: #FCEBEB; color: #791F1F; border-radius: 6px; padding: 8px 12px; font-size: 12px; margin-bottom: 10px; }
+
 /* Misc */
 .sep { border: none; border-top: 0.5px solid rgba(0,0,0,0.12); margin: 0.75rem 0; }
 .empty-state { display: flex; align-items: center; justify-content: center; height: 180px; color: #6b6b6b; font-size: 13px; }
 
 @media (max-width: 768px) {
-  .main-grid  { grid-template-columns: 1fr; }
-  .kpi-grid   { grid-template-columns: repeat(2, 1fr); }
-  .specs-grid { grid-template-columns: repeat(2, 1fr); }
+  .main-grid           { grid-template-columns: 1fr; }
+  .kpi-grid            { grid-template-columns: repeat(2, 1fr); }
+  .specs-grid          { grid-template-columns: repeat(2, 1fr); }
+  .cost-analysis-grid  { grid-template-columns: 1fr; }
 }

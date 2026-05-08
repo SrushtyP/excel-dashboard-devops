@@ -17,87 +17,175 @@
     <span class="badge badge-info">Free Tier &middot; &#8377;16,000 credit</span>
   </div>
 
-  <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi">
-      <div class="kpi-label">Monthly (all running)</div>
-      <div class="kpi-value red" id="kpiUnopt">—</div>
-      <div class="kpi-sub">3 VMs &times; Standard_D2s_v3</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Monthly (optimized)</div>
-      <div class="kpi-value green" id="kpiOpt">—</div>
-      <div class="kpi-sub">snooze + destroy applied</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Monthly savings</div>
-      <div class="kpi-value green" id="kpiSavings">—</div>
-      <div class="kpi-sub" id="kpiSavingsPct">—</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Credit runway</div>
-      <div class="kpi-value red" id="kpiRunway">—</div>
-      <div class="kpi-sub" id="kpiRunwaySub">—</div>
-    </div>
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('inventory')">VM Inventory</button>
+    <button class="tab-btn" onclick="switchTab('costs')">Cost Analysis</button>
   </div>
 
-  <div class="main-grid">
-    <div class="panel">
-      <div class="panel-title">VM Inventory</div>
-      <div id="vmList"></div>
+  <!-- ── TAB 1: INVENTORY ── -->
+  <div id="tab-inventory">
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi">
+        <div class="kpi-label">Monthly (all running)</div>
+        <div class="kpi-value red" id="kpiUnopt">—</div>
+        <div class="kpi-sub">3 VMs &times; Standard_D2s_v3</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Monthly (optimized)</div>
+        <div class="kpi-value green" id="kpiOpt">—</div>
+        <div class="kpi-sub">snooze + destroy applied</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Monthly savings</div>
+        <div class="kpi-value green" id="kpiSavings">—</div>
+        <div class="kpi-sub" id="kpiSavingsPct">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Credit runway</div>
+        <div class="kpi-value red" id="kpiRunway">—</div>
+        <div class="kpi-sub" id="kpiRunwaySub">—</div>
+      </div>
     </div>
 
-    <div class="right-panel">
+    <div class="main-grid">
       <div class="panel">
-        <div id="emptyState" class="empty-state">Select a VM to view details</div>
-        <div id="vmDetail" style="display:none">
-          <div class="detail-header">
-            <div>
-              <div class="detail-title" id="detailTitle"></div>
-              <div class="detail-need" id="detailNeed"></div>
+        <div class="panel-title">VM Inventory</div>
+        <div id="vmList"></div>
+      </div>
+
+      <div class="right-panel">
+        <div class="panel">
+          <div id="emptyState" class="empty-state">Select a VM to view details</div>
+          <div id="vmDetail" style="display:none">
+            <div class="detail-header">
+              <div>
+                <div class="detail-title" id="detailTitle"></div>
+                <div class="detail-need" id="detailNeed"></div>
+              </div>
+              <span class="badge" id="detailBadge"></span>
             </div>
-            <span class="badge" id="detailBadge"></span>
-          </div>
-          <div class="specs-grid" id="specsGrid"></div>
-          <hr class="sep"/>
-          <div class="panel-title">Cost Breakdown</div>
-          <div id="costRows"></div>
-          <hr class="sep"/>
-          <div class="panel-title">Change VM State</div>
-          <div class="action-buttons" id="actionButtons">
-            <button class="action-btn" data-action="running">▶ Running</button>
-            <button class="action-btn" data-action="snoozed">⏸ Snooze</button>
-            <button class="action-btn" data-action="destroyed">✕ Destroy</button>
-          </div>
-          <div class="invoke-row">
-            <button class="invoke-btn" id="invokeBtn" disabled>Invoke VM</button>
-          </div>
-          <div id="logSection" style="display:none;margin-top:1rem">
-            <div class="panel-title">Execution Log</div>
-            <div class="log-box" id="logBox"></div>
+            <div class="specs-grid" id="specsGrid"></div>
+            <hr class="sep"/>
+            <div class="panel-title">Cost Breakdown</div>
+            <div id="costRows"></div>
+            <hr class="sep"/>
+            <div class="panel-title">Change VM State</div>
+            <div class="action-buttons" id="actionButtons">
+              <button class="action-btn" data-action="running">&#9654; Running</button>
+              <button class="action-btn" data-action="snoozed">&#9646;&#9646; Snooze</button>
+              <button class="action-btn" data-action="destroyed">&#10005; Destroy</button>
+            </div>
+            <div class="invoke-row">
+              <button class="invoke-btn" id="invokeBtn" disabled>Invoke VM</button>
+            </div>
+            <div id="logSection" style="display:none;margin-top:1rem">
+              <div class="panel-title">Execution Log</div>
+              <div class="log-box" id="logBox"></div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="panel">
-        <div class="panel-title">Monthly Cost by VM State</div>
-        <div id="costBars"></div>
-        <hr class="sep"/>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-size:12px;color:#6b6b6b">Free credit used</span>
-          <span style="font-size:12px;font-weight:500" id="creditLabel">&#8377;3,200 / &#8377;16,000</span>
-        </div>
-        <div class="credit-track">
-          <div class="credit-fill" id="creditFill" style="width:20%"></div>
-        </div>
-        <div style="font-size:11px;color:#6b6b6b;margin-top:4px" id="creditNote">
-          Optimized spend extends runway from 22 days &rarr; 52 days
+        <div class="panel">
+          <div class="panel-title">Monthly Cost by VM State</div>
+          <div id="costBars"></div>
+          <hr class="sep"/>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:12px;color:#6b6b6b">Free credit used</span>
+            <span style="font-size:12px;font-weight:500" id="creditLabel">&#8377;3,200 / &#8377;16,000</span>
+          </div>
+          <div class="credit-track">
+            <div class="credit-fill" id="creditFill" style="width:20%"></div>
+          </div>
+          <div style="font-size:11px;color:#6b6b6b;margin-top:4px" id="creditNote">
+            Optimized spend extends runway from 22 days &rarr; 52 days
+          </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- ── TAB 2: COST ANALYSIS ── -->
+  <div id="tab-costs" style="display:none">
+
+    <div class="kpi-grid" id="costKpiGrid">
+      <div class="kpi">
+        <div class="kpi-label">Always-On Cost/mo</div>
+        <div class="kpi-value red" id="ckpiAlways">&#8377;5,966</div>
+        <div class="kpi-sub">720 hrs &times; &#8377;8.28/hr</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Snoozed Cost/mo</div>
+        <div class="kpi-value green" id="ckpiSnoozed">&#8377;2,186</div>
+        <div class="kpi-sub">264 hrs &times; &#8377;8.28/hr</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Destroyed Cost/mo</div>
+        <div class="kpi-value green" id="ckpiDestroyed">&#8377;0</div>
+        <div class="kpi-sub">0 hrs billed</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Last Updated</div>
+        <div class="kpi-value" id="ckpiUpdated" style="font-size:13px">—</div>
+        <div class="kpi-sub">Azure Cost Management</div>
+      </div>
+    </div>
+
+    <div class="cost-analysis-grid">
+
+      <!-- Strategy Comparison Bar Chart -->
+      <div class="panel">
+        <div class="panel-title">Strategy Cost Comparison (INR/month)</div>
+        <div id="strategyError" style="display:none" class="error-note"></div>
+        <div id="strategyBars" class="chart-area">
+          <div class="chart-loading">Loading Azure cost data...</div>
+        </div>
+      </div>
+
+      <!-- Actual Azure Spend by Resource Group -->
+      <div class="panel">
+        <div class="panel-title">Actual Azure Spend by Resource Group (Last 30 Days)</div>
+        <div id="rgError" style="display:none" class="error-note"></div>
+        <div id="rgBars" class="chart-area">
+          <div class="chart-loading">Loading Azure cost data...</div>
+        </div>
+      </div>
+
+      <!-- Daily Spend Trend -->
+      <div class="panel" style="grid-column: span 2">
+        <div class="panel-title">Daily Spend Trend — Last 30 Days (INR)</div>
+        <div id="dailyError" style="display:none" class="error-note"></div>
+        <div id="dailyBars" class="chart-area chart-area-wide">
+          <div class="chart-loading">Loading Azure cost data...</div>
+        </div>
+      </div>
+
+      <!-- Savings Table -->
+      <div class="panel" style="grid-column: span 2">
+        <div class="panel-title">Savings Breakdown — Always-On vs Optimized Strategies</div>
+        <div id="savingsTable"></div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
 <script>
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('tab-inventory').style.display = tab === 'inventory' ? 'block' : 'none';
+  document.getElementById('tab-costs').style.display     = tab === 'costs'     ? 'block' : 'none';
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && tab === 'inventory') || (i === 1 && tab === 'costs'));
+  });
+  if (tab === 'costs' && !window.costsLoaded) {
+    loadCostAnalysis();
+    window.costsLoaded = true;
+  }
+}
+
+// ── Inventory Tab ─────────────────────────────────────────────
 const stateColors = { running:"badge-success", snoozed:"badge-gray", destroyed:"badge-danger" };
 const dotClass    = { running:"dot-running", snoozed:"dot-snoozed", destroyed:"dot-destroyed" };
 const costDefs    = {
@@ -129,7 +217,7 @@ async function loadSummary() {
     document.getElementById("kpiOpt").innerHTML     = "&#8377;" + s.monthly_optimized_inr.toLocaleString('en-IN');
     document.getElementById("kpiSavings").innerHTML = "&#8377;" + s.monthly_savings_inr.toLocaleString('en-IN');
     document.getElementById("kpiSavingsPct").textContent = s.savings_percent + "% cost reduction";
-    document.getElementById("kpiRunway").textContent = s.runway_unoptimized_days + " days";
+    document.getElementById("kpiRunway").textContent     = s.runway_unoptimized_days + " days";
     document.getElementById("kpiRunwaySub").textContent  = "unoptimized → " + s.runway_optimized_days + " days optimized";
     const pct = Math.round(s.credit_used_inr / s.credit_total_inr * 100);
     document.getElementById("creditFill").style.width = pct + "%";
@@ -257,6 +345,138 @@ document.getElementById("invokeBtn").addEventListener("click", async () => {
     btn.textContent = "Invoke VM";
   }
 });
+
+// ── Cost Analysis Tab ─────────────────────────────────────────
+async function loadCostAnalysis() {
+  try {
+    const r    = await fetch("/api/costs");
+    const data = await r.json();
+
+    if (data.error) {
+      showCostError(data.error);
+      return;
+    }
+
+    document.getElementById("ckpiUpdated").textContent = data.last_updated;
+
+    // Strategy comparison bars
+    renderStrategyBars(data.strategy_comparison);
+
+    // Resource group bars
+    renderRGBars(data.by_resource_group);
+
+    // Daily trend bars
+    renderDailyBars(data.daily_trend);
+
+    // Savings table
+    renderSavingsTable(data.strategy_comparison);
+
+  } catch(e) {
+    showCostError("Could not load Azure cost data: " + e.message);
+  }
+}
+
+function showCostError(msg) {
+  ["strategyError","rgError","dailyError"].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display  = "block";
+    el.textContent    = "⚠ " + msg;
+  });
+  ["strategyBars","rgBars","dailyBars"].forEach(id => {
+    document.getElementById(id).innerHTML = "";
+  });
+}
+
+function renderStrategyBars(strategies) {
+  const max = Math.max(...strategies.map(s => s.cost_inr), 1);
+  document.getElementById("strategyBars").innerHTML = strategies.map(s => {
+    const pct   = Math.round((s.cost_inr / max) * 100);
+    const color = s.label === "Always On" ? "#A32D2D" : s.label === "Snoozed" ? "#888780" : "#3B6D11";
+    return `
+      <div class="bar-row" style="margin-bottom:16px">
+        <span class="bar-label" style="width:90px">${s.label}</span>
+        <div style="flex:1">
+          <div class="bar-track" style="height:28px;border-radius:6px">
+            <div class="bar-fill" style="width:${pct}%;background:${color};height:100%;border-radius:6px;display:flex;align-items:center;padding-left:8px">
+              ${pct > 15 ? `<span style="color:#fff;font-size:12px;font-weight:500">&#8377;${s.cost_inr.toLocaleString('en-IN')}/mo</span>` : ''}
+            </div>
+          </div>
+          <div style="font-size:11px;color:#6b6b6b;margin-top:4px">${s.description} &middot; ${s.hours_per_mo} hrs/mo</div>
+        </div>
+        <span class="bar-amount" style="width:110px">&#8377;${s.cost_inr.toLocaleString('en-IN')}/mo</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderRGBars(byRG) {
+  const entries = Object.entries(byRG);
+  if (entries.length === 0) {
+    document.getElementById("rgBars").innerHTML = "<div style='color:#6b6b6b;font-size:13px;padding:20px 0'>No spend data found for this subscription in the last 30 days.</div>";
+    return;
+  }
+  const max = Math.max(...entries.map(([,v]) => v), 1);
+  document.getElementById("rgBars").innerHTML = entries.map(([rg, cost]) => {
+    const pct   = Math.round((cost / max) * 100);
+    const color = rg.toLowerCase().includes("dashboard") ? "#185FA5" : "#888780";
+    return `
+      <div class="bar-row" style="margin-bottom:14px">
+        <span class="bar-label" style="width:160px;font-size:11px">${rg}</span>
+        <div class="bar-track" style="height:22px;border-radius:6px;flex:1">
+          <div class="bar-fill" style="width:${pct}%;background:${color};height:100%;border-radius:6px"></div>
+        </div>
+        <span class="bar-amount" style="width:110px">&#8377;${cost.toLocaleString('en-IN')}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderDailyBars(trend) {
+  if (!trend || trend.length === 0) {
+    document.getElementById("dailyBars").innerHTML = "<div style='color:#6b6b6b;font-size:13px;padding:20px 0'>No daily trend data available.</div>";
+    return;
+  }
+  const max = Math.max(...trend.map(d => d.cost_inr), 1);
+  document.getElementById("dailyBars").innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:4px;height:140px;padding-bottom:24px;position:relative">
+      ${trend.map(d => {
+        const h   = Math.max(Math.round((d.cost_inr / max) * 120), 2);
+        const day = d.date.slice(5);
+        return `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div title="&#8377;${d.cost_inr} on ${d.date}"
+                 style="width:100%;height:${h}px;background:#185FA5;border-radius:3px 3px 0 0;cursor:pointer;transition:opacity 0.15s"
+                 onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
+            </div>
+            <span style="font-size:9px;color:#6b6b6b;transform:rotate(-45deg);white-space:nowrap">${day}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderSavingsTable(strategies) {
+  const alwaysOn = strategies.find(s => s.label === "Always On");
+  if (!alwaysOn) return;
+  document.getElementById("savingsTable").innerHTML = strategies.map(s => {
+    const saving    = alwaysOn.cost_inr - s.cost_inr;
+    const savingPct = alwaysOn.cost_inr > 0 ? Math.round((saving / alwaysOn.cost_inr) * 100) : 0;
+    const annual    = saving * 12;
+    return `
+      <div class="cost-row">
+        <span class="cost-label" style="font-weight:500;width:120px">${s.label}</span>
+        <span class="cost-label">&#8377;${s.cost_inr.toLocaleString('en-IN')}/mo</span>
+        <span class="cost-amount ${saving > 0 ? 'savings' : ''}">
+          ${saving > 0 ? 'Saves &#8377;' + saving.toLocaleString('en-IN') + '/mo (' + savingPct + '%)' : 'Baseline'}
+        </span>
+        <span class="cost-amount ${annual > 0 ? 'savings' : ''}">
+          ${annual > 0 ? '&#8377;' + annual.toLocaleString('en-IN') + '/yr saved' : '—'}
+        </span>
+      </div>
+    `;
+  }).join("");
+}
 
 loadInventory();
 renderBars();
