@@ -67,6 +67,17 @@ jobs:
           echo "[webservers]" > ansible/inventory.ini
           echo "${{ steps.get_ip.outputs.vm_ip }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> ansible/inventory.ini
 
+      - name: Create azure_config.json
+        run: |
+          cat > inventory/azure_config.json << EOF
+          {
+            "tenant_id"      : "${{ secrets.AZURE_TENANT_ID }}",
+            "client_id"      : "${{ secrets.AZURE_CLIENT_ID }}",
+            "client_secret"  : "${{ secrets.AZURE_CLIENT_SECRET }}",
+            "subscription_id": "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          }
+          EOF
+
       - name: Install Flask on VM
         run: |
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
