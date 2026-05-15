@@ -77,7 +77,6 @@
         requirements: "{{ app_dir }}/requirements.txt"
         executable: pip3
 
-    # ✅ FIXED NODE INSTALL
     - name: Install Node.js 20
       shell: |
         curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -85,11 +84,38 @@
       args:
         executable: /bin/bash
 
-    - name: Copy frontend source to VM
-      copy:
-        src: ../frontend/
-        dest: "{{ app_dir }}/frontend/"
+    # ✅ FIX: Create a tar archive of frontend source EXCLUDING node_modules and dist
+    #         This avoids copying hundreds of MB of files over SSH one-by-one
+    - name: Create frontend source archive (excluding node_modules and dist)
+      delegate_to: localhost
+      become: no
+      shell: |
+        tar --exclude='../frontend/node_modules' \
+            --exclude='../frontend/dist' \
+            --exclude='../frontend/.git' \
+            -czf /tmp/frontend-src.tar.gz \
+            -C ../frontend .
+      args:
+        executable: /bin/bash
+
+    - name: Create frontend directory on VM
+      file:
+        path: "{{ app_dir }}/frontend"
+        state: directory
         owner: "{{ app_user }}"
+        mode: '0755'
+
+    - name: Upload frontend archive to VM
+      copy:
+        src: /tmp/frontend-src.tar.gz
+        dest: /tmp/frontend-src.tar.gz
+
+    - name: Extract frontend source on VM
+      shell: |
+        tar -xzf /tmp/frontend-src.tar.gz -C {{ app_dir }}/frontend
+        rm -f /tmp/frontend-src.tar.gz
+      args:
+        executable: /bin/bash
 
     - name: Install frontend npm dependencies
       shell: cd {{ app_dir }}/frontend && npm install
