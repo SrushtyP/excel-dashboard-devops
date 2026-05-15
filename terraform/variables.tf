@@ -17,12 +17,5 @@ variable "admin_username" {
 }
 
 variable "vm_name" {
-  default = "vm-running"
-}
-
-# Set to false to destroy vm-destroyed resources
-# Set to true to provision vm-destroyed
-variable "create_vm_destroyed" {
-  type    = bool
-  default = false
+  default = "vm-dashboard"
 }
