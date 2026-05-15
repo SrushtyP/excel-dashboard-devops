@@ -127,16 +127,24 @@
         group: "{{ app_user }}"
         recurse: yes
 
-    # ✅ FIX: Run npm install and build as azureuser, NOT root
+    # ✅ FIX: Run npm install and build as azureuser with explicit PATH
+    #         Using 'npm run build' via sudo loses PATH; call vite directly instead
     - name: Install frontend npm dependencies
-      shell: cd {{ app_dir }}/frontend && npm install
+      shell: |
+        export PATH=$PATH:/usr/bin:/usr/local/bin
+        cd {{ app_dir }}/frontend
+        npm install
+        chmod -R 755 node_modules/.bin
       become: yes
       become_user: "{{ app_user }}"
       args:
         executable: /bin/bash
 
     - name: Build React frontend
-      shell: cd {{ app_dir }}/frontend && npm run build
+      shell: |
+        export PATH=$PATH:/usr/bin:/usr/local/bin
+        cd {{ app_dir }}/frontend
+        ./node_modules/.bin/vite build
       become: yes
       become_user: "{{ app_user }}"
       args:
