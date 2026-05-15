@@ -231,20 +231,4 @@ resource "azurerm_linux_virtual_machine" "vm_destroyed" {
   }
 }
 
-# ─── OUTPUTS ─────────────────────────────────────────────────────────────────
-
-output "vm_running_ip" {
-  value = azurerm_public_ip.pip_running.ip_address
-}
-
-output "vm_snoozed_ip" {
-  value = azurerm_public_ip.pip_snoozed.ip_address
-}
-
-output "vm_destroyed_ip" {
-  value = var.create_vm_destroyed ? azurerm_public_ip.pip_destroyed[0].ip_address : "not provisioned"
-}
-
-output "app_url" {
-  value = "http://${azurerm_public_ip.pip_running.ip_address}:5000"
-}
+# Outputs are defined in output.tf
