@@ -94,6 +94,8 @@ resource "azurerm_network_interface" "nic_running" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.pip_running.id
   }
+
+  depends_on = [azurerm_subnet.subnet, azurerm_virtual_network.vnet]
 }
 
 resource "azurerm_network_interface_security_group_association" "nic_nsg_running" {
@@ -145,6 +147,8 @@ resource "azurerm_network_interface" "nic_snoozed" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.pip_snoozed.id
   }
+
+  depends_on = [azurerm_subnet.subnet, azurerm_virtual_network.vnet]
 }
 
 resource "azurerm_network_interface_security_group_association" "nic_nsg_snoozed" {
