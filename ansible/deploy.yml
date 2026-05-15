@@ -117,13 +117,28 @@
       args:
         executable: /bin/bash
 
+    # ✅ FIX: Set correct ownership BEFORE npm install
+    #         Without this, node_modules/.bin/vite is root-owned → rc:126 Permission denied
+    - name: Set frontend directory ownership to azureuser
+      file:
+        path: "{{ app_dir }}/frontend"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        recurse: yes
+
+    # ✅ FIX: Run npm install and build as azureuser, NOT root
     - name: Install frontend npm dependencies
       shell: cd {{ app_dir }}/frontend && npm install
+      become: yes
+      become_user: "{{ app_user }}"
       args:
         executable: /bin/bash
 
     - name: Build React frontend
       shell: cd {{ app_dir }}/frontend && npm run build
+      become: yes
+      become_user: "{{ app_user }}"
       args:
         executable: /bin/bash
 
