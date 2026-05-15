@@ -24,6 +24,7 @@ jobs:
           echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
           echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
           echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
+          echo "create_vm_destroyed = false" >> terraform/terraform.tfvars
 
       - name: Terraform Init
         working-directory: terraform
@@ -45,8 +46,8 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-      - name: Get VM IP from Terraform
-        id: get_ip
+      - name: Get VM IPs from Terraform
+        id: get_ips
         working-directory: terraform
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -55,17 +56,25 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
-          IP=$(terraform output -raw public_ip_address)
-          echo "vm_ip=$IP" >> $GITHUB_OUTPUT
-          echo "VM Public IP: $IP"
+          IP_RUNNING=$(terraform output -raw vm_running_ip)
+          IP_SNOOZED=$(terraform output -raw vm_snoozed_ip)
+          echo "ip_running=$IP_RUNNING" >> $GITHUB_OUTPUT
+          echo "ip_snoozed=$IP_SNOOZED" >> $GITHUB_OUTPUT
+          echo "vm-running IP: $IP_RUNNING"
+          echo "vm-snoozed IP: $IP_SNOOZED"
 
       - name: Install Ansible and sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
 
       - name: Create Ansible inventory
         run: |
-          echo "[webservers]" > ansible/inventory.ini
-          echo "${{ steps.get_ip.outputs.vm_ip }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> ansible/inventory.ini
+          cat > ansible/inventory.ini << EOF
+          [vm_running]
+          ${{ steps.get_ips.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+          [vm_snoozed]
+          ${{ steps.get_ips.outputs.ip_snoozed }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          EOF
 
       - name: Create azure_config.json
         run: |
@@ -78,16 +87,14 @@ jobs:
           }
           EOF
 
-      - name: Install Flask on VM
+      - name: Install Flask on vm-running
         run: |
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
-            azureuser@${{ steps.get_ip.outputs.vm_ip }} \
+            azureuser@${{ steps.get_ips.outputs.ip_running }} \
             "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
 
-      # ✅ FIX: Pre-package frontend on the runner BEFORE Ansible runs
-      #         Excludes node_modules and dist so only source files are transferred
-      - name: Package frontend source (exclude node_modules and dist)
+      - name: Package frontend source
         run: |
           tar --exclude='frontend/node_modules' \
               --exclude='frontend/dist' \
@@ -95,40 +102,32 @@ jobs:
               -czf /tmp/frontend-src.tar.gz \
               -C frontend .
 
-      - name: Run Ansible Playbook
-        run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+      - name: Deploy app to vm-running only
+        run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --limit vm_running
 
-      - name: Run state playbooks per VM
+      - name: Deallocate vm-snoozed via Azure CLI
         run: |
-          while IFS= read -r line; do
-            VM_ID=$(echo "$line" | cut -d'|' -f1)
-            STATE=$(echo "$line" | cut -d'|' -f2)
-            echo "VM: $VM_ID -> $STATE"
-            case "$STATE" in
-              running)
-                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml
-                ;;
-              snoozed)
-                ansible-playbook -i ansible/inventory.ini ansible/playbook-snooze.yml
-                ;;
-              destroyed)
-                ansible-playbook -i ansible/inventory.ini ansible/playbook-destroy.yml
-                ;;
-            esac
-          done < <(python3 -c "
-          import json
-          with open('inventory/inventory.json') as f:
-              d = json.load(f)
-          for vm in d['vms']:
-              print(vm['id'] + '|' + vm['desired_state'])
-          ")
+          az login --service-principal \
+            --username ${{ secrets.AZURE_CLIENT_ID }} \
+            --password ${{ secrets.AZURE_CLIENT_SECRET }} \
+            --tenant ${{ secrets.AZURE_TENANT_ID }}
+
+          az vm deallocate \
+            --resource-group rg-dashboard-demo \
+            --name vm-snoozed \
+            --no-wait
+
+          echo "vm-snoozed deallocated — zero compute cost while snoozed"
+
+      - name: Confirm vm-destroyed status
+        run: echo "vm-destroyed is not provisioned (Terraform count=0) — no Azure resources exist"
 
       - name: Verify deployment
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:5000)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ips.outputs.ip_running }}:5000)
           if [ "$STATUS" = "200" ]; then
-            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:5000"
+            echo "App is live at http://${{ steps.get_ips.outputs.ip_running }}:5000"
           else
             echo "Verification failed - Status: $STATUS"
             exit 1

@@ -1,27 +1,28 @@
-variable "subscription_id" { type = string }
-variable "client_id"       { type = string }
-variable "client_secret"   {
-  type      = string
-  sensitive = true
-}
-variable "tenant_id"       { type = string }
+variable "subscription_id" {}
+variable "client_id" {}
+variable "client_secret" {}
+variable "tenant_id" {}
+variable "admin_password" {}
+
 variable "resource_group_name" {
-  type    = string
   default = "rg-dashboard-demo"
 }
+
 variable "location" {
-  type    = string
-  default = "centralus"
+  default = "East US"
 }
-variable "vm_name" {
-  type    = string
-  default = "vm-dashboard"
-}
+
 variable "admin_username" {
-  type    = string
   default = "azureuser"
 }
-variable "admin_password" {
-  type      = string
-  sensitive = true
+
+variable "vm_name" {
+  default = "vm-running"
+}
+
+# Set to false to destroy vm-destroyed resources
+# Set to true to provision vm-destroyed
+variable "create_vm_destroyed" {
+  type    = bool
+  default = false
 }
