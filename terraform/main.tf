@@ -107,7 +107,7 @@ resource "azurerm_linux_virtual_machine" "vm_running" {
   name                            = "vm-running"
   resource_group_name             = azurerm_resource_group.rg.name
   location                        = azurerm_resource_group.rg.location
-  size                            = "Standard_B2s"
+  size                            = "Standard_DS2_v2"
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
   disable_password_authentication = false
@@ -160,7 +160,7 @@ resource "azurerm_linux_virtual_machine" "vm_snoozed" {
   name                            = "vm-snoozed"
   resource_group_name             = azurerm_resource_group.rg.name
   location                        = azurerm_resource_group.rg.location
-  size                            = "Standard_B2s"
+  size                            = "Standard_DS2_v2"
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
   disable_password_authentication = false
@@ -216,7 +216,7 @@ resource "azurerm_linux_virtual_machine" "vm_destroyed" {
   name                            = "vm-destroyed"
   resource_group_name             = azurerm_resource_group.rg.name
   location                        = azurerm_resource_group.rg.location
-  size                            = "Standard_B2s"
+  size                            = "Standard_DS2_v2"
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
   disable_password_authentication = false
