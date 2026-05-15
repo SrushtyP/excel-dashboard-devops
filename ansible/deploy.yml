@@ -75,7 +75,41 @@
       pip:
         requirements: "{{ app_dir }}/requirements.txt"
         executable: pip3
-
+        - name: Install Node.js 20
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+      args:
+        executable: /bin/bash
+ 
+    - name: Copy frontend source to VM
+      copy:
+        src: ../frontend/
+        dest: "{{ app_dir }}/frontend/"
+        owner: "{{ app_user }}"
+ 
+    - name: Install frontend npm dependencies
+      shell: cd {{ app_dir }}/frontend && npm install
+      args:
+        executable: /bin/bash
+ 
+    - name: Build React frontend
+      shell: cd {{ app_dir }}/frontend && npm run build
+      args:
+        executable: /bin/bash
+ 
+    - name: Create frontend-dist directory
+      file:
+        path: /opt/frontend-dist
+        state: directory
+        owner: "{{ app_user }}"
+        mode: '0755'
+ 
+    - name: Copy built frontend to serve location
+      shell: cp -r {{ app_dir }}/frontend/dist/. /opt/frontend-dist/
+      args:
+        executable: /bin/bash
+        
     - name: Kill existing Flask process
       shell: kill $(cat /tmp/flask.pid) 2>/dev/null || true
       ignore_errors: yes

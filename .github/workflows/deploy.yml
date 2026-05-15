@@ -78,12 +78,29 @@ jobs:
           }
           EOF
 
-      - name: Install Flask on VM
+      - name: Install Flask and dependencies on VM
         run: |
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
             azureuser@${{ steps.get_ip.outputs.vm_ip }} \
-            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
+            "sudo apt update -y && \
+             sudo apt install python3-pip -y && \
+             sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml requests \
+               azure-mgmt-compute==30.6.0 \
+               azure-mgmt-costmanagement==4.0.1 \
+               azure-identity==1.17.1 \
+               azure-mgmt-resource==23.1.1 \
+               gitpython"
+
+      - name: Set environment variables on VM
+        run: |
+          sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
+            -o StrictHostKeyChecking=no \
+            azureuser@${{ steps.get_ip.outputs.vm_ip }} \
+            "grep -q GITHUB_TOKEN /etc/environment || echo 'GITHUB_TOKEN=${{ secrets.GH_PAT_TOKEN }}' | sudo tee -a /etc/environment && \
+             grep -q GITHUB_OWNER /etc/environment || echo 'GITHUB_OWNER=${{ secrets.GITHUB_OWNER }}' | sudo tee -a /etc/environment && \
+             grep -q GITHUB_REPO /etc/environment || echo 'GITHUB_REPO=${{ secrets.GITHUB_REPO }}' | sudo tee -a /etc/environment && \
+             grep -q AZURE_RESOURCE_GROUP /etc/environment || echo 'AZURE_RESOURCE_GROUP=${{ secrets.AZURE_RESOURCE_GROUP }}' | sudo tee -a /etc/environment"
 
       - name: Run Ansible Playbook
         run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
