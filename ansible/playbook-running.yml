@@ -3,16 +3,27 @@
   hosts: webservers
   become: yes
 
+  vars:
+    pat_token: ""
+    owner: ""
+    repo: "excel-dashboard-devops"
+
   tasks:
     - name: Confirm VM is reachable
       ping:
 
+    # ✅ Start Flask with PAT_TOKEN, OWNER, REPO and AZURE env vars
     - name: Ensure Flask app is running
       shell: |
         if [ -f /tmp/flask.pid ] && kill -0 $(cat /tmp/flask.pid) 2>/dev/null; then
           echo "Flask already running"
         else
-          cd /opt/dashboard-app && nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
+          cd /opt/dashboard-app && \
+          PAT_TOKEN="{{ pat_token }}" \
+          OWNER="{{ owner }}" \
+          REPO="{{ repo }}" \
+          AZURE_RESOURCE_GROUP="rg-dashboard-demo" \
+          nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
           echo "Flask started"
         fi
       args:

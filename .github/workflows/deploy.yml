@@ -94,11 +94,13 @@ jobs:
               -czf /tmp/frontend-src.tar.gz \
               -C frontend .
 
+      # ✅ Pass PAT_TOKEN and OWNER to Ansible so Flask gets them as env vars
       - name: Deploy app to VM
-        run: ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+        run: |
+          ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+            -e "pat_token=${{ secrets.PAT_TOKEN }}" \
+            -e "owner=${{ secrets.OWNER }}"
 
-      # ✅ vm-running: ensure Flask is running on the real VM
-      # ✅ vm-snoozed and vm-destroyed: inventory data only, no real VMs
       - name: Apply VM states
         run: |
           while IFS= read -r line; do
@@ -107,7 +109,10 @@ jobs:
             echo "VM: $VM_ID -> $STATE"
             case "$STATE" in
               running)
-                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml
+                # ✅ Pass env vars here too so Flask restarts with correct env
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml \
+                  -e "pat_token=${{ secrets.PAT_TOKEN }}" \
+                  -e "owner=${{ secrets.OWNER }}"
                 ;;
               snoozed)
                 echo "$VM_ID is inventory-only (no real VM) — skipping"

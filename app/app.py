@@ -153,9 +153,9 @@ def get_vms():
 # ── GET /api/pipeline/runs ────────────────────────────────────────────────────
 @app.route('/api/pipeline/runs')
 def get_pipeline_runs():
-    token = os.environ.get('GITHUB_TOKEN')
-    owner = os.environ.get('GITHUB_OWNER', '')
-    repo  = os.environ.get('GITHUB_REPO', 'excel-dashboard-devops')
+    token = os.environ.get('PAT_TOKEN')
+    owner = os.environ.get('OWNER', '')
+    repo  = os.environ.get('REPO', 'excel-dashboard-devops')
     if not token or not owner:
         return jsonify({'error': 'GITHUB_TOKEN or GITHUB_OWNER not set', 'runs': []}), 503
     try:

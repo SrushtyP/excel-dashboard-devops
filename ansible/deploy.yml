@@ -6,6 +6,9 @@
   vars:
     app_dir: /opt/dashboard-app
     app_user: azureuser
+    pat_token: ""
+    owner: ""
+    repo: "excel-dashboard-devops"
 
   tasks:
 
@@ -86,7 +89,6 @@
         executable: /bin/bash
 
     # ✅ FIX: Create a tar archive of frontend source EXCLUDING node_modules and dist
-    #         This avoids copying hundreds of MB of files over SSH one-by-one
     - name: Create frontend source archive (excluding node_modules and dist)
       delegate_to: localhost
       become: no
@@ -118,8 +120,6 @@
       args:
         executable: /bin/bash
 
-    # ✅ FIX: Set correct ownership BEFORE npm install
-    #         Without this, node_modules/.bin/vite is root-owned → rc:126 Permission denied
     - name: Set frontend directory ownership to azureuser
       file:
         path: "{{ app_dir }}/frontend"
@@ -128,8 +128,6 @@
         group: "{{ app_user }}"
         recurse: yes
 
-    # ✅ FIX: Run npm install and build as azureuser with explicit PATH
-    #         Using 'npm run build' via sudo loses PATH; call vite directly instead
     - name: Install frontend npm dependencies
       shell: |
         export PATH=$PATH:/usr/bin:/usr/local/bin
@@ -168,9 +166,15 @@
         kill $(cat /tmp/flask.pid) 2>/dev/null || true
       ignore_errors: yes
 
+    # ✅ Start Flask with PAT_TOKEN, OWNER, REPO and AZURE env vars
     - name: Start Flask app in background
       shell: |
-        cd {{ app_dir }} && nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
+        cd {{ app_dir }} && \
+        PAT_TOKEN="{{ pat_token }}" \
+        OWNER="{{ owner }}" \
+        REPO="{{ repo }}" \
+        AZURE_RESOURCE_GROUP="rg-dashboard-demo" \
+        nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
       args:
         executable: /bin/bash
 
