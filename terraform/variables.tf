@@ -19,3 +19,8 @@ variable "admin_username" {
 variable "vm_name" {
   default = "vm-dashboard"
 }
+
+# Change this if capacity issues occur — no need to touch main.tf
+variable "vm_size" {
+  default = "Standard_D2s_v3"
+}
