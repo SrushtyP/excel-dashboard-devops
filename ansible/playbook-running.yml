@@ -31,13 +31,13 @@
 
     - name: Wait for Flask to be ready
       wait_for:
-        port: 5000
+        port: 80
         host: 0.0.0.0
         delay: 3
         timeout: 30
 
     - name: Confirm app is live
-      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:5000
+      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:80
       register: http_status
 
     - name: Print status
