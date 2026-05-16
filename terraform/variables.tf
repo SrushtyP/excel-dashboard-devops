@@ -16,11 +16,13 @@ variable "admin_username" {
   default = "azureuser"
 }
 
-variable "vm_name" {
-  default = "vm-dashboard"
-}
-
 # Change this if capacity issues occur — no need to touch main.tf
 variable "vm_size" {
   default = "Standard_D2s_v3"
+}
+
+# Set to true to provision vm-destroyed, false to destroy it
+variable "create_vm_destroyed" {
+  type    = bool
+  default = false
 }

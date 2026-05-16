@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import subprocess
 import requests
 from datetime import datetime
 
@@ -15,6 +14,7 @@ BASE_DIR       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INVENTORY_YML  = os.path.join(BASE_DIR, 'inventory.yml')
 INVENTORY_JSON = os.path.join(BASE_DIR, 'inventory', 'inventory.json')
 AZURE_CFG      = os.path.join(BASE_DIR, 'inventory', 'azure_config.json')
+PENDING_LOG    = os.path.join(BASE_DIR, 'inventory', 'pending_requests.json')
 
 
 # ── React frontend ────────────────────────────────────────────────────────────
@@ -223,6 +223,8 @@ def get_cost():
 
 
 # ── POST /api/vms/<vm_id>/request-state ──────────────────────────────────────
+# Does NOT auto-push to git. Saves request to pending_requests.json.
+# Admin reviews and triggers pipeline manually via git push.
 @app.route('/api/vms/<vm_id>/request-state', methods=['POST'])
 def request_vm_state(vm_id):
     try:
@@ -231,51 +233,51 @@ def request_vm_state(vm_id):
         if new_state not in {'running', 'snoozed', 'destroyed'}:
             return jsonify({'error': f'Invalid state "{new_state}"'}), 400
 
-        with open(INVENTORY_YML, 'r') as f:
-            content = f.read()
-
-        # Find the VM block and patch state + enabled
-        pattern = r'(- name: ' + re.escape(vm_id) + r'\b.*?)(?=\n  - name:|\Z)'
-        match = re.search(pattern, content, re.DOTALL)
-        if not match:
-            return jsonify({'error': f'VM "{vm_id}" not found in inventory.yml'}), 404
-
-        block = match.group(1)
-        block = re.sub(r'(state:\s*)\S+', r'\g<1>' + new_state, block)
-        block = re.sub(r'(enabled:\s*)\S+',
-                       r'\g<1>' + ('false' if new_state == 'destroyed' else 'true'), block)
-        patched = content[:match.start()] + block + content[match.end():]
-
-        with open(INVENTORY_YML, 'w') as f:
-            f.write(patched)
-
-        # Sync inventory.json desired_state
+        # ── Load existing pending requests ────────────────────────────────────
         try:
-            with open(INVENTORY_JSON) as f:
-                inv = json.load(f)
-            for v in inv.get('vms', []):
-                if v['id'] == vm_id:
-                    v['desired_state'] = new_state
-            with open(INVENTORY_JSON, 'w') as f:
-                json.dump(inv, f, indent=2)
+            with open(PENDING_LOG) as f:
+                pending = json.load(f)
         except Exception:
-            pass
+            pending = []
 
-        # Git commit + push → triggers GitHub Actions pipeline
-        commit_msg = f'chore: set {vm_id} to {new_state} via IM dashboard'
-        subprocess.run(['git', 'add', INVENTORY_YML, INVENTORY_JSON],
-                       check=True, cwd=BASE_DIR, capture_output=True)
-        subprocess.run(['git', 'commit', '-m', commit_msg],
-                       check=True, cwd=BASE_DIR, capture_output=True)
-        subprocess.run(['git', 'push'], check=True, cwd=BASE_DIR, capture_output=True)
+        # ── Append new request entry ──────────────────────────────────────────
+        entry = {
+            'vm_id':        vm_id,
+            'new_state':    new_state,
+            'requested_at': datetime.utcnow().isoformat(),
+            'status':       'pending',
+        }
+        pending.append(entry)
 
-        return jsonify({'accepted': True, 'vm': vm_id, 'requestedState': new_state,
-                        'message': 'inventory.yml updated and pushed. Pipeline starting.'})
-    except subprocess.CalledProcessError as e:
-        return jsonify({'error': f'Git error: {e.stderr.decode() if e.stderr else str(e)}',
-                        'accepted': False}), 500
+        # ── Save pending log ──────────────────────────────────────────────────
+        os.makedirs(os.path.dirname(PENDING_LOG), exist_ok=True)
+        with open(PENDING_LOG, 'w') as f:
+            json.dump(pending, f, indent=2)
+
+        return jsonify({
+            'accepted':       True,
+            'vm':             vm_id,
+            'requestedState': new_state,
+            'message': (
+                f'Your request to set {vm_id} to "{new_state}" has been logged. '
+                f'The admin will review and trigger the pipeline via a git push.'
+            ),
+            'adminAction': 'pending',
+        })
+
     except Exception as e:
         return jsonify({'error': str(e), 'accepted': False}), 500
+
+
+# ── GET /api/vms/pending-requests ────────────────────────────────────────────
+# Admin endpoint — view all pending state change requests
+@app.route('/api/vms/pending-requests')
+def get_pending_requests():
+    try:
+        with open(PENDING_LOG) as f:
+            return jsonify(json.load(f))
+    except Exception:
+        return jsonify([])
 
 
 if __name__ == '__main__':

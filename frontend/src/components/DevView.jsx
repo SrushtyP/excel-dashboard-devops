@@ -45,61 +45,63 @@ function mergeAzureStates(datacenters, azureVms) {
 }
 
 function InfraView({ datacenters, setDatacenters }) {
-  const [selectedDc, setSelectedDc]     = useState(null)   // full DC object, null = grid view
+  const [selectedDc, setSelectedDc]     = useState(null)
   const [showModal, setShowModal]       = useState(false)
-  const [vmTransition, setVmTransition] = useState(null)   // { vm, targetState }
-  const [toast, setToast]               = useState(null)   // message string
+  const [vmTransition, setVmTransition] = useState(null)  // { vm, targetState }
+  const [toast, setToast]               = useState(null)  // { msg, targetState, vmAlias }
 
   // Live Azure VM state polling
   const { vms: azureVms, lastSync: azSync } = useAzureVMs(true)
   const liveDcs = mergeAzureStates(datacenters, azureVms)
 
-  // When user requests a state change
+  // When user clicks destroy / snooze / start
   async function handleRequestStateChange(vm, targetState) {
-    // Optimistically show toast
-    const label = targetState==='running'?'start':targetState==='snoozed'?'snooze':'destroy'
-    setToast(`Request to ${label} "${vm.alias}" accepted. Updating inventory.yml and pushing to GitHub — pipeline will start shortly.`)
+    // ── Show toast immediately with admin-action message ──────────────────
+    setToast({
+      msg: 'Request logged for admin review.',
+      targetState,
+      vmAlias: vm.alias,
+    })
 
-    // Call backend (fails gracefully if not connected)
+    // ── Call backend — saves to pending_requests.json, no git push ────────
     try {
       await fetch(`/api/vms/${vm.id}/request-state`, {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: targetState }),
       })
-    } catch (_) { /* offline — state will sync via polling */ }
+    } catch (_) { /* offline — request still shown in UI */ }
 
-    // Show cinematic overlay after short delay
+    // ── Show cinematic overlay after short delay ───────────────────────────
     setTimeout(() => {
       setVmTransition({ vm, targetState })
     }, 1500)
   }
 
-  // Overlay completes → apply state locally (Azure poll will confirm)
+  // Overlay completes → apply state locally (Azure poll will confirm later)
   function handleTransitionComplete(vmId, newState) {
     setDatacenters(prev =>
       prev.map(dc=>({
         ...dc,
         racks: dc.racks.map(rack=>({
           ...rack,
-          vms: rack.vms.map(vm=>vm.id===vmId?{...vm,state:newState}:vm),
+          vms: rack.vms.map(vm=>vm.id===vmId ? {...vm, state:newState} : vm),
         })),
       }))
     )
-    // Refresh selected DC
     if (selectedDc) {
-      setSelectedDc(prev=>prev ? {
+      setSelectedDc(prev => prev ? {
         ...prev,
         racks: prev.racks.map(rack=>({
           ...rack,
-          vms: rack.vms.map(vm=>vm.id===vmId?{...vm,state:newState}:vm),
+          vms: rack.vms.map(vm=>vm.id===vmId ? {...vm, state:newState} : vm),
         })),
       } : null)
     }
     setVmTransition(null)
   }
 
-  function addDc(dc) { setDatacenters(p=>[...p,dc]) }
+  function addDc(dc) { setDatacenters(p=>[...p, dc]) }
   function removeDc(id) {
     setDatacenters(p=>p.filter(d=>d.id!==id))
     if (selectedDc?.id===id) setSelectedDc(null)
@@ -112,7 +114,6 @@ function InfraView({ datacenters, setDatacenters }) {
   const totalCost = allVms.reduce((a,v)=>a+(v.optimisedMonthlyInr||0),0)
   const isLive    = !!azureVms
 
-  // Live selected DC derived from merged state
   const liveSel = selectedDc
     ? liveDcs.find(d=>d.id===selectedDc.id) || null
     : null
@@ -169,12 +170,11 @@ function InfraView({ datacenters, setDatacenters }) {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* ── GRID VIEW (no DC selected) ── */}
+          {/* ── GRID VIEW ── */}
           {!selectedDc && (
             <motion.div key="grid"
               initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}
               transition={{duration:0.22}}>
-              {/* State legend */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-card px-4 py-3 mb-5">
                 <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">VM State Guide</p>
                 <div className="flex flex-wrap gap-4 text-[11px] text-gray-500">
@@ -183,7 +183,6 @@ function InfraView({ datacenters, setDatacenters }) {
                   ))}
                 </div>
               </div>
-              {/* DC card grid — fills full width */}
               <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3">
                 Datacenters ({liveDcs.length}) — click to open
               </p>
@@ -199,7 +198,7 @@ function InfraView({ datacenters, setDatacenters }) {
             </motion.div>
           )}
 
-          {/* ── DATACENTER DETAIL (full main section) ── */}
+          {/* ── DATACENTER DETAIL ── */}
           {selectedDc && liveSel && (
             <motion.div key={selectedDc.id}
               initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:20}}
@@ -225,7 +224,14 @@ function InfraView({ datacenters, setDatacenters }) {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {toast && <RequestToast msg={toast} onDone={()=>setToast(null)} />}
+        {toast && (
+          <RequestToast
+            msg={toast.msg}
+            targetState={toast.targetState}
+            vmAlias={toast.vmAlias}
+            onDone={() => setToast(null)}
+          />
+        )}
       </AnimatePresence>
     </>
   )

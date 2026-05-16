@@ -41,14 +41,7 @@ resource "azurerm_subnet" "subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-resource "azurerm_public_ip" "public_ip" {
-  name                = "pip-dashboard"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-}
-
+# ── Shared NSG ────────────────────────────────────────────────────────────────
 resource "azurerm_network_security_group" "nsg" {
   name                = "nsg-dashboard"
   location            = azurerm_resource_group.rg.location
@@ -67,8 +60,20 @@ resource "azurerm_network_security_group" "nsg" {
   }
 
   security_rule {
-    name                       = "allow-flask"
+    name                       = "allow-http"
     priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-flask"
+    priority                   = 120
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -79,8 +84,17 @@ resource "azurerm_network_security_group" "nsg" {
   }
 }
 
-resource "azurerm_network_interface" "nic" {
-  name                = "nic-dashboard"
+# ── VM-RUNNING (app deployed here, always on during demo) ─────────────────────
+resource "azurerm_public_ip" "pip_running" {
+  name                = "pip-vm-running"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_network_interface" "nic_running" {
+  name                = "nic-vm-running"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -88,26 +102,134 @@ resource "azurerm_network_interface" "nic" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.public_ip.id
+    public_ip_address_id          = azurerm_public_ip.pip_running.id
   }
 
   depends_on = [azurerm_subnet.subnet, azurerm_virtual_network.vnet]
 }
 
-resource "azurerm_network_interface_security_group_association" "nic_nsg" {
-  network_interface_id      = azurerm_network_interface.nic.id
+resource "azurerm_network_interface_security_group_association" "nic_nsg_running" {
+  network_interface_id      = azurerm_network_interface.nic_running.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-resource "azurerm_linux_virtual_machine" "vm" {
-  name                            = var.vm_name
+resource "azurerm_linux_virtual_machine" "vm_running" {
+  name                            = "vm-running"
   resource_group_name             = azurerm_resource_group.rg.name
   location                        = azurerm_resource_group.rg.location
   size                            = var.vm_size
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
   disable_password_authentication = false
-  network_interface_ids           = [azurerm_network_interface.nic.id]
+  network_interface_ids           = [azurerm_network_interface.nic_running.id]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+}
+
+# ── VM-SNOOZED (provisioned but deallocated — zero compute cost) ──────────────
+resource "azurerm_public_ip" "pip_snoozed" {
+  name                = "pip-vm-snoozed"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_network_interface" "nic_snoozed" {
+  name                = "nic-vm-snoozed"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.pip_snoozed.id
+  }
+
+  depends_on = [azurerm_subnet.subnet, azurerm_virtual_network.vnet]
+}
+
+resource "azurerm_network_interface_security_group_association" "nic_nsg_snoozed" {
+  network_interface_id      = azurerm_network_interface.nic_snoozed.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+}
+
+resource "azurerm_linux_virtual_machine" "vm_snoozed" {
+  name                            = "vm-snoozed"
+  resource_group_name             = azurerm_resource_group.rg.name
+  location                        = azurerm_resource_group.rg.location
+  size                            = var.vm_size
+  admin_username                  = var.admin_username
+  admin_password                  = var.admin_password
+  disable_password_authentication = false
+  network_interface_ids           = [azurerm_network_interface.nic_snoozed.id]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+}
+
+# ── VM-DESTROYED (not provisioned — set var.create_vm_destroyed=true to create) 
+resource "azurerm_public_ip" "pip_destroyed" {
+  count               = var.create_vm_destroyed ? 1 : 0
+  name                = "pip-vm-destroyed"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_network_interface" "nic_destroyed" {
+  count               = var.create_vm_destroyed ? 1 : 0
+  name                = "nic-vm-destroyed"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.pip_destroyed[0].id
+  }
+
+  depends_on = [azurerm_subnet.subnet, azurerm_virtual_network.vnet]
+}
+
+resource "azurerm_network_interface_security_group_association" "nic_nsg_destroyed" {
+  count                     = var.create_vm_destroyed ? 1 : 0
+  network_interface_id      = azurerm_network_interface.nic_destroyed[0].id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+}
+
+resource "azurerm_linux_virtual_machine" "vm_destroyed" {
+  count                           = var.create_vm_destroyed ? 1 : 0
+  name                            = "vm-destroyed"
+  resource_group_name             = azurerm_resource_group.rg.name
+  location                        = azurerm_resource_group.rg.location
+  size                            = var.vm_size
+  admin_username                  = var.admin_username
+  admin_password                  = var.admin_password
+  disable_password_authentication = false
+  network_interface_ids           = [azurerm_network_interface.nic_destroyed[0].id]
 
   os_disk {
     caching              = "ReadWrite"

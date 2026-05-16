@@ -25,6 +25,7 @@ jobs:
           echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
           echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
           echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
+          echo "create_vm_destroyed = false" >> terraform/terraform.tfvars
 
       - name: Terraform Init
         working-directory: terraform
@@ -46,8 +47,9 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-      - name: Get VM IP from Terraform
-        id: get_ip
+      # ── Get IPs for all provisioned VMs ──────────────────────────────────────
+      - name: Get VM IPs from Terraform
+        id: get_ips
         working-directory: terraform
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -56,17 +58,23 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
-          IP=$(terraform output -raw public_ip_address)
-          echo "vm_ip=$IP" >> $GITHUB_OUTPUT
-          echo "VM Public IP: $IP"
+          IP_RUNNING=$(terraform output -raw vm_running_ip)
+          IP_SNOOZED=$(terraform output -raw vm_snoozed_ip)
+          echo "ip_running=$IP_RUNNING" >> $GITHUB_OUTPUT
+          echo "ip_snoozed=$IP_SNOOZED" >> $GITHUB_OUTPUT
+          echo "vm-running IP: $IP_RUNNING"
+          echo "vm-snoozed IP: $IP_SNOOZED"
 
       - name: Install Ansible and sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
 
+      # ── Ansible inventory: vm-running only (app deploys here) ────────────────
       - name: Create Ansible inventory
         run: |
-          echo "[webservers]" > ansible/inventory.ini
-          echo "${{ steps.get_ip.outputs.vm_ip }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> ansible/inventory.ini
+          cat > ansible/inventory.ini << EOF
+          [vm_running]
+          ${{ steps.get_ips.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          EOF
 
       - name: Create azure_config.json
         run: |
@@ -79,11 +87,11 @@ jobs:
           }
           EOF
 
-      - name: Install Flask on VM
+      - name: Install Flask on vm-running
         run: |
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
-            azureuser@${{ steps.get_ip.outputs.vm_ip }} \
+            azureuser@${{ steps.get_ips.outputs.ip_running }} \
             "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
 
       - name: Package frontend source
@@ -94,47 +102,46 @@ jobs:
               -czf /tmp/frontend-src.tar.gz \
               -C frontend .
 
-      # ✅ Pass PAT_TOKEN and OWNER to Ansible so Flask gets them as env vars
-      - name: Deploy app to VM
+      # ── Deploy app ONLY to vm-running ─────────────────────────────────────────
+      - name: Deploy app to vm-running
         run: |
           ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
+            --limit vm_running \
             -e "pat_token=${{ secrets.PAT_TOKEN }}" \
             -e "owner=${{ secrets.OWNER }}"
 
+      # ── Handle VM states ──────────────────────────────────────────────────────
+      # vm-running  → ensure Flask is running (Ansible)
+      # vm-snoozed  → deallocate via Azure CLI (zero compute cost)
+      # vm-destroyed → already not provisioned (Terraform count=0)
       - name: Apply VM states
         run: |
-          while IFS= read -r line; do
-            VM_ID=$(echo "$line" | cut -d'|' -f1)
-            STATE=$(echo "$line" | cut -d'|' -f2)
-            echo "VM: $VM_ID -> $STATE"
-            case "$STATE" in
-              running)
-                # ✅ Pass env vars here too so Flask restarts with correct env
-                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml \
-                  -e "pat_token=${{ secrets.PAT_TOKEN }}" \
-                  -e "owner=${{ secrets.OWNER }}"
-                ;;
-              snoozed)
-                echo "$VM_ID is inventory-only (no real VM) — skipping"
-                ;;
-              destroyed)
-                echo "$VM_ID is inventory-only (no real VM) — skipping"
-                ;;
-            esac
-          done < <(python3 -c "
-          import json
-          with open('inventory/inventory.json') as f:
-              d = json.load(f)
-          for vm in d['vms']:
-              print(vm['id'] + '|' + vm['desired_state'])
-          ")
+          # Ensure vm-running Flask is up
+          ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml \
+            --limit vm_running \
+            -e "pat_token=${{ secrets.PAT_TOKEN }}" \
+            -e "owner=${{ secrets.OWNER }}"
+
+          # Deallocate vm-snoozed via Azure CLI
+          az login --service-principal \
+            --username ${{ secrets.AZURE_CLIENT_ID }} \
+            --password ${{ secrets.AZURE_CLIENT_SECRET }} \
+            --tenant ${{ secrets.AZURE_TENANT_ID }}
+
+          az vm deallocate \
+            --resource-group rg-dashboard-demo \
+            --name vm-snoozed \
+            --no-wait
+
+          echo "vm-snoozed deallocated — zero compute cost"
+          echo "vm-destroyed not provisioned — Terraform count=0"
 
       - name: Verify deployment
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:5000)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ips.outputs.ip_running }}:5000)
           if [ "$STATUS" = "200" ]; then
-            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:5000"
+            echo "App is live at http://${{ steps.get_ips.outputs.ip_running }}:5000"
           else
             echo "Verification failed - Status: $STATUS"
             exit 1
