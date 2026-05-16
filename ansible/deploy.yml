@@ -1,5 +1,4 @@
-﻿#hi
-- name: Deploy Excel Dashboard App
+﻿- name: Deploy Excel Dashboard App
   hosts: webservers
   become: yes
 
@@ -182,7 +181,7 @@
         timeout: 30
 
     - name: Confirm app is running
-      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:5000
+      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:80
       register: http_status
 
     - name: Print status

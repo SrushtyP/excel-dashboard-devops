@@ -127,9 +127,9 @@ jobs:
       - name: Verify deployment
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:5000)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.vm_ip }}:80)
           if [ "$STATUS" = "200" ]; then
-            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:5000"
+            echo "App is live at http://${{ steps.get_ip.outputs.vm_ip }}:80"
           else
             echo "Verification failed - Status: $STATUS"
             exit 1
