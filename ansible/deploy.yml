@@ -1,6 +1,6 @@
 ﻿#hi
 - name: Deploy Excel Dashboard App
-  hosts: webservers
+  hosts: vm_running
   become: yes
 
   vars:

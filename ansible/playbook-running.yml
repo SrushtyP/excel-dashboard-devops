@@ -1,6 +1,6 @@
 ﻿---
 - name: Start VM (ensure running)
-  hosts: webservers
+  hosts: vm_running
   become: yes
 
   vars:
