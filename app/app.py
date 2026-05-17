@@ -197,10 +197,18 @@ def get_pipeline_runs():
         return jsonify({'error': str(e), 'runs': []}), 500
 
 
-# ── GET /api/cost ──────────────────────────────────────────────────────────────
-# Returns real Azure cost data in USD: total MTD, daily breakdown, by service
+# ── GET /api/cost ─────────────────────────────────────────────────────────────
+# Tries 3 scopes in order:
+#   1. Billing account scope  (works on free trial)
+#   2. Subscription scope     (works on PAYG)
+#   3. Graceful fallback      (inventory estimates)
 @app.route('/api/cost')
 def get_cost():
+    import calendar
+    BILLING_ACCOUNT = os.environ.get(
+        'AZURE_BILLING_ACCOUNT',
+        '08939987-cf28-58ff-ed6d-3b121f622150:2b26c114-8654-4813-8f69-40498d10a78d_2019-05-31'
+    )
     try:
         from azure.mgmt.costmanagement import CostManagementClient
         from azure.mgmt.costmanagement.models import (
@@ -212,10 +220,27 @@ def get_cost():
         now    = datetime.utcnow()
         start  = now.replace(day=1).strftime('%Y-%m-%d')
         end    = now.strftime('%Y-%m-%d')
-        scope  = f'/subscriptions/{sub_id}'
 
-        # ── Total MTD by resource group ───────────────────────────────────────
-        q_total = QueryDefinition(
+        # Try billing scope first, fall back to subscription scope
+        scopes = [
+            f'/providers/Microsoft.Billing/billingAccounts/{BILLING_ACCOUNT}',
+            f'/subscriptions/{sub_id}',
+        ]
+
+        def _query(scope, q):
+            return client.query.usage(scope, q)
+
+        def _try_scopes(q):
+            last_err = None
+            for scope in scopes:
+                try:
+                    return _query(scope, q), scope
+                except Exception as e:
+                    last_err = e
+            raise last_err
+
+        # ── 1. Total MTD by resource group ────────────────────────────────────
+        q_rg = QueryDefinition(
             type='ActualCost', timeframe='Custom',
             time_period=QueryTimePeriod(from_property=start, to=end),
             dataset=QueryDataset(
@@ -223,26 +248,26 @@ def get_cost():
                 aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
                 grouping=[QueryGrouping(type='Dimension', name='ResourceGroupName')]),
         )
-        res_total = client.query.usage(scope, q_total)
+        res_rg, used_scope = _try_scopes(q_rg)
         by_rg     = {}
         total_usd = 0.0
-        for row in (res_total.rows or []):
+        for row in (res_rg.rows or []):
             cost    = float(row[0])
             rg_name = str(row[1]) if len(row) > 1 else 'unknown'
             by_rg[rg_name] = round(cost, 4)
             total_usd += cost
         total_usd = round(total_usd, 4)
 
-        # ── Daily breakdown last 30 days ──────────────────────────────────────
+        # ── 2. Daily breakdown ────────────────────────────────────────────────
         start_30 = (now - timedelta(days=29)).strftime('%Y-%m-%d')
-        q_daily  = QueryDefinition(
+        q_daily = QueryDefinition(
             type='ActualCost', timeframe='Custom',
             time_period=QueryTimePeriod(from_property=start_30, to=end),
             dataset=QueryDataset(
                 granularity='Daily',
                 aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
         )
-        res_daily = client.query.usage(scope, q_daily)
+        res_daily, _ = _try_scopes(q_daily)
         daily = []
         for row in (res_daily.rows or []):
             cost     = float(row[0])
@@ -252,8 +277,8 @@ def get_cost():
             daily.append({'date': date_val, 'costUsd': round(cost, 4)})
         daily.sort(key=lambda x: x['date'])
 
-        # ── Cost by service ───────────────────────────────────────────────────
-        q_service = QueryDefinition(
+        # ── 3. Cost by service ────────────────────────────────────────────────
+        q_svc = QueryDefinition(
             type='ActualCost', timeframe='Custom',
             time_period=QueryTimePeriod(from_property=start, to=end),
             dataset=QueryDataset(
@@ -261,74 +286,134 @@ def get_cost():
                 aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
                 grouping=[QueryGrouping(type='Dimension', name='ServiceName')]),
         )
-        res_service = client.query.usage(scope, q_service)
-        by_service  = []
-        for row in (res_service.rows or []):
+        res_svc, _ = _try_scopes(q_svc)
+        by_service = []
+        for row in (res_svc.rows or []):
             cost = float(row[0])
             svc  = str(row[1]) if len(row) > 1 else 'Other'
             if cost > 0.0001:
                 by_service.append({'service': svc, 'costUsd': round(cost, 4)})
         by_service.sort(key=lambda x: x['costUsd'], reverse=True)
 
-        # ── Last month total ──────────────────────────────────────────────────
-        first_this      = now.replace(day=1)
-        lm_end          = (first_this - timedelta(days=1)).strftime('%Y-%m-%d')
-        lm_start        = (first_this - timedelta(days=1)).replace(day=1).strftime('%Y-%m-%d')
-        q_last          = QueryDefinition(
+        # ── 4. Cost by resource ───────────────────────────────────────────────
+        q_res = QueryDefinition(
+            type='ActualCost', timeframe='Custom',
+            time_period=QueryTimePeriod(from_property=start, to=end),
+            dataset=QueryDataset(
+                granularity='None',
+                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
+                grouping=[QueryGrouping(type='Dimension', name='ResourceId')]),
+        )
+        try:
+            res_res, _ = _try_scopes(q_res)
+            by_resource = []
+            for row in (res_res.rows or []):
+                cost     = float(row[0])
+                res_id   = str(row[1]) if len(row) > 1 else 'unknown'
+                res_name = res_id.split('/')[-1] if '/' in res_id else res_id
+                if cost > 0.0001:
+                    by_resource.append({'resource': res_name, 'costUsd': round(cost, 4), 'resourceId': res_id})
+            by_resource.sort(key=lambda x: x['costUsd'], reverse=True)
+        except Exception:
+            by_resource = []
+
+        # ── 5. Last month ─────────────────────────────────────────────────────
+        first_this     = now.replace(day=1)
+        lm_end         = (first_this - timedelta(days=1)).strftime('%Y-%m-%d')
+        lm_start       = (first_this - timedelta(days=1)).replace(day=1).strftime('%Y-%m-%d')
+        q_last = QueryDefinition(
             type='ActualCost', timeframe='Custom',
             time_period=QueryTimePeriod(from_property=lm_start, to=lm_end),
             dataset=QueryDataset(
                 granularity='None',
                 aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
         )
-        res_last      = client.query.usage(scope, q_last)
-        last_month_usd = round(sum(float(r[0]) for r in (res_last.rows or [])), 4)
+        try:
+            res_last, _ = _try_scopes(q_last)
+            last_month_usd = round(sum(float(r[0]) for r in (res_last.rows or [])), 4)
+        except Exception:
+            last_month_usd = 0.0
 
-        # ── Project full-month spend ──────────────────────────────────────────
-        day_of_month   = max(now.day, 1)
-        import calendar
-        days_in_month  = calendar.monthrange(now.year, now.month)[1]
-        projected_usd  = round((total_usd / day_of_month) * days_in_month, 4)
-        mom_change_pct = round(((projected_usd - last_month_usd) / max(last_month_usd, 0.01)) * 100, 1) if last_month_usd > 0 else 0
+        # ── Projection ────────────────────────────────────────────────────────
+        day_of_month  = max(now.day, 1)
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        projected_usd = round((total_usd / day_of_month) * days_in_month, 4)
+        mom_pct = round(((projected_usd - last_month_usd) / max(last_month_usd, 0.01)) * 100, 1) if last_month_usd > 0 else 0
 
         return jsonify({
-            'currency':         'USD',
-            'period':           f'{start} to {end}',
-            'totalMtdUsd':      total_usd,
+            'currency':          'USD',
+            'period':            f'{start} to {end}',
+            'scopeUsed':         used_scope,
+            'totalMtdUsd':       total_usd,
             'projectedMonthUsd': projected_usd,
-            'lastMonthUsd':     last_month_usd,
-            'momChangePct':     mom_change_pct,
-            'byResourceGroup':  by_rg,
-            'dailyBreakdown':   daily,
-            'byService':        by_service[:10],
-            'synced':           datetime.utcnow().isoformat(),
-            'live':             True,
+            'lastMonthUsd':      last_month_usd,
+            'momChangePct':      mom_pct,
+            'byResourceGroup':   by_rg,
+            'dailyBreakdown':    daily,
+            'byService':         by_service[:10],
+            'byResource':        by_resource[:20],
+            'synced':            datetime.utcnow().isoformat(),
+            'live':              True,
         })
 
     except ImportError:
         return jsonify({'error': 'azure-mgmt-costmanagement not installed', 'live': False}), 503
-
     except Exception as e:
-        # Graceful fallback — still returns valid shape so frontend renders
-        try:
-            inv = _load_inv()
-            cs  = inv.get('total_cost_summary', {})
-            return jsonify({
-                'currency':          'USD',
-                'period':            'fallback',
-                'totalMtdUsd':       round(cs.get('monthly_optimized_inr', 0) / 84.0, 2),
-                'projectedMonthUsd': round(cs.get('monthly_unoptimized_inr', 0) / 84.0, 2),
-                'lastMonthUsd':      0,
-                'momChangePct':      0,
-                'byResourceGroup':   {},
-                'dailyBreakdown':    [],
-                'byService':         [],
-                'synced':            datetime.utcnow().isoformat(),
-                'live':              False,
-                'error':             str(e),
+        return jsonify({
+            'currency': 'USD', 'period': 'error', 'totalMtdUsd': 0,
+            'projectedMonthUsd': 0, 'lastMonthUsd': 0, 'momChangePct': 0,
+            'byResourceGroup': {}, 'dailyBreakdown': [], 'byService': [],
+            'byResource': [], 'live': False, 'error': str(e),
+            'synced': datetime.utcnow().isoformat(),
+        })
+
+
+# ── GET /api/advisor ───────────────────────────────────────────────────────────
+# Returns Azure Advisor cost recommendations
+@app.route('/api/advisor')
+def get_advisor():
+    BILLING_ACCOUNT = os.environ.get(
+        'AZURE_BILLING_ACCOUNT',
+        '08939987-cf28-58ff-ed6d-3b121f622150:2b26c114-8654-4813-8f69-40498d10a78d_2019-05-31'
+    )
+    try:
+        from azure.mgmt.advisor import AdvisorManagementClient
+        cred, sub_id = _azure_credential()
+        advisor = AdvisorManagementClient(cred, sub_id)
+        recs = list(advisor.recommendations.list())
+        result = []
+        for r in recs:
+            props = r.properties if hasattr(r, 'properties') else {}
+            savings = None
+            try:
+                ext = getattr(props, 'extended_properties', {}) or {}
+                savings = float(ext.get('annualSavingsAmount', 0)) if ext else None
+            except Exception:
+                pass
+            result.append({
+                'id':           r.id or '',
+                'title':        getattr(props, 'short_description', {}).get('solution', '') if hasattr(getattr(props, 'short_description', None), 'get') else str(getattr(props, 'short_description', '')),
+                'description':  getattr(props, 'short_description', {}).get('problem', '') if hasattr(getattr(props, 'short_description', None), 'get') else '',
+                'impact':       getattr(r, 'impact', 'Medium'),
+                'category':     getattr(r, 'category', 'Cost'),
+                'resource':     (r.id or '').split('/')[-3] if r.id and '/' in r.id else '—',
+                'annualSavingsUsd': savings,
+                'updatedAt':    str(getattr(props, 'last_updated', '')),
             })
-        except Exception:
-            return jsonify({'error': str(e), 'live': False}), 500
+        result_cost = [x for x in result if str(x.get('category','')).lower() == 'cost']
+        return jsonify({
+            'recommendations': result_cost or result,
+            'total': len(result),
+            'costCount': len(result_cost),
+            'synced': datetime.utcnow().isoformat(),
+            'live': True,
+        })
+    except ImportError:
+        return jsonify({'live': False, 'error': 'azure-mgmt-advisor not installed',
+                        'recommendations': [], 'total': 0, 'costCount': 0})
+    except Exception as e:
+        return jsonify({'live': False, 'error': str(e),
+                        'recommendations': [], 'total': 0, 'costCount': 0})
 
 
 # ── POST /api/vms/<vm_id>/request-state ──────────────────────────────────────
@@ -407,6 +492,83 @@ def get_monitor_logs():
         return jsonify({'entries': [], 'live': False, 'error': 'azure-mgmt-monitor not installed'})
     except Exception as e:
         return jsonify({'entries': [], 'live': False, 'error': str(e)})
+
+
+
+# ── POST /api/admin/action-request ───────────────────────────────────────────
+# Admin reviews a pending request and triggers the pipeline.
+@app.route('/api/admin/action-request', methods=['POST'])
+def admin_action_request():
+    import re, subprocess
+    try:
+        body      = request.get_json()
+        vm_id     = body.get('vm_id', '')
+        new_state = body.get('new_state', '')
+
+        if new_state not in {'running', 'snoozed', 'destroyed'}:
+            return jsonify({'ok': False, 'error': f'Invalid state'}), 400
+
+        INVENTORY_YML_PATH = os.path.join(BASE_DIR, 'inventory.yml')
+
+        # 1. Patch inventory.yml if it exists
+        try:
+            with open(INVENTORY_YML_PATH, 'r') as f:
+                yml = f.read()
+            # Find the VM block and update state + enabled
+            pattern = r'(- name: ' + re.escape(vm_id) + r'\b.*?)(?=\n  - name:|\Z)'
+            match = re.search(pattern, yml, re.DOTALL)
+            if match:
+                block = match.group(1)
+                block = re.sub(r'(state:\s*)\S+', r'\g<1>' + new_state, block)
+                block = re.sub(r'(enabled:\s*)\S+',
+                    r'\g<1>' + ('false' if new_state == 'destroyed' else 'true'), block)
+                patched = yml[:match.start()] + block + yml[match.end():]
+                with open(INVENTORY_YML_PATH, 'w') as f:
+                    f.write(patched)
+        except Exception:
+            pass
+
+        # 2. Update inventory.json desired_state
+        try:
+            with open(INVENTORY_JSON) as f:
+                inv = json.load(f)
+            for v in inv.get('vms', []):
+                if v['id'] == vm_id:
+                    v['desired_state'] = new_state
+            with open(INVENTORY_JSON, 'w') as f:
+                json.dump(inv, f, indent=2)
+        except Exception:
+            pass
+
+        # 3. Mark request as actioned in pending log
+        try:
+            with open(PENDING_LOG) as f:
+                pending = json.load(f)
+            for r in pending:
+                if r['vm_id'] == vm_id and r['new_state'] == new_state and r.get('status') == 'pending':
+                    r['status'] = 'actioned'
+                    r['actioned_at'] = datetime.utcnow().isoformat()
+                    break
+            with open(PENDING_LOG, 'w') as f:
+                json.dump(pending, f, indent=2)
+        except Exception:
+            pass
+
+        # 4. Git commit + push → triggers GitHub Actions pipeline
+        files = [f for f in [INVENTORY_JSON, INVENTORY_YML_PATH, PENDING_LOG] if os.path.exists(f)]
+        commit_msg = f'admin: set {vm_id} to {new_state} via IM dashboard'
+        subprocess.run(['git', 'add'] + files, check=True, cwd=BASE_DIR, capture_output=True)
+        subprocess.run(['git', 'commit', '-m', commit_msg], check=True, cwd=BASE_DIR, capture_output=True)
+        subprocess.run(['git', 'push'], check=True, cwd=BASE_DIR, capture_output=True)
+
+        return jsonify({'ok': True, 'message': f'{vm_id} set to {new_state}. Pipeline triggered.'})
+
+    except subprocess.CalledProcessError as e:
+        err = e.stderr.decode() if e.stderr else str(e)
+        return jsonify({'ok': False, 'error': f'Git error: {err}'}), 500
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80, debug=False)
