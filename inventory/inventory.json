@@ -1,7 +1,7 @@
 {
   "company": "ChemCore International",
   "project": "Information Management Platform",
-  "last_updated": "2026-05-05",
+  "last_updated": "2026-05-17",
   "total_cost_summary": {
     "monthly_unoptimized_inr": 21600,
     "monthly_optimized_inr": 9216,
@@ -23,18 +23,8 @@
       "priority": "critical",
       "contact": "compliance-team@chemcore.com",
       "business_need": "24/7 availability for regulatory bodies across 82 countries. Hosts the live Excel Dashboard app for client demos.",
-      "specs": {
-        "cpu": 2,
-        "memory_gb": 8,
-        "disk_gb": 30,
-        "vm_size": "Standard_D2s_v3"
-      },
-      "cost": {
-        "hourly_inr": 7.18,
-        "monthly_inr": 5250,
-        "optimized_monthly_inr": 5250,
-        "savings_inr": 0
-      }
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 5250, "savings_inr": 0 }
     },
     {
       "id": "vm-snoozed",
@@ -46,18 +36,8 @@
       "priority": "medium",
       "contact": "rnd-mumbai@chemcore.com",
       "business_need": "Active 8am-8pm IST weekdays only. Snoozed overnight and weekends. Saves 57% vs always-on.",
-      "specs": {
-        "cpu": 2,
-        "memory_gb": 8,
-        "disk_gb": 30,
-        "vm_size": "Standard_D2s_v3"
-      },
-      "cost": {
-        "hourly_inr": 7.18,
-        "monthly_inr": 5250,
-        "optimized_monthly_inr": 1966,
-        "savings_inr": 3284
-      }
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 1966, "savings_inr": 3284 }
     },
     {
       "id": "vm-destroyed",
@@ -69,18 +49,60 @@
       "priority": "low",
       "contact": "audit-team@chemcore.com",
       "business_need": "Ephemeral compute for India CPCB hazardous waste compliance report. Enabled only during audit window then destroyed.",
-      "specs": {
-        "cpu": 2,
-        "memory_gb": 8,
-        "disk_gb": 30,
-        "vm_size": "Standard_D2s_v3"
-      },
-      "cost": {
-        "hourly_inr": 7.18,
-        "monthly_inr": 5250,
-        "optimized_monthly_inr": 0,
-        "savings_inr": 5250
-      }
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 0, "savings_inr": 5250 }
+    },
+    {
+      "id": "vm-sec-api",
+      "alias": "API Gateway (Secondary)",
+      "name": "vm-sec-api",
+      "desired_state": "snoozed",
+      "environment": "staging",
+      "business_unit": "Platform Engineering",
+      "priority": "medium",
+      "contact": "platform@chemcore.com",
+      "business_need": "Secondary API gateway for load testing and pre-production validation. Snoozed when not under active test.",
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 1966, "savings_inr": 3284 }
+    },
+    {
+      "id": "vm-sec-db",
+      "alias": "Data Processing Node",
+      "name": "vm-sec-db",
+      "desired_state": "destroyed",
+      "environment": "ephemeral",
+      "business_unit": "Data Engineering",
+      "priority": "low",
+      "contact": "data-eng@chemcore.com",
+      "business_need": "Batch processing node for quarterly data migration jobs. Destroyed after each run to save costs.",
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 0, "savings_inr": 5250 }
+    },
+    {
+      "id": "vm-dr-primary",
+      "alias": "DR Failover Node",
+      "name": "vm-dr-primary",
+      "desired_state": "snoozed",
+      "environment": "dr",
+      "business_unit": "Infrastructure",
+      "priority": "critical",
+      "contact": "infra@chemcore.com",
+      "business_need": "Disaster recovery node. Kept snoozed to minimise cost — can be started within 2 minutes if primary fails.",
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 1966, "savings_inr": 3284 }
+    },
+    {
+      "id": "vm-dr-backup",
+      "alias": "Backup & Restore Engine",
+      "name": "vm-dr-backup",
+      "desired_state": "destroyed",
+      "environment": "dr",
+      "business_unit": "Infrastructure",
+      "priority": "low",
+      "contact": "infra@chemcore.com",
+      "business_need": "Runs nightly backup jobs then self-destructs. Reprovisioned automatically each night via pipeline schedule.",
+      "specs": { "cpu": 2, "memory_gb": 8, "disk_gb": 30, "vm_size": "Standard_D2s_v3" },
+      "cost": { "hourly_inr": 7.18, "monthly_inr": 5250, "optimized_monthly_inr": 0, "savings_inr": 5250 }
     }
   ]
 }

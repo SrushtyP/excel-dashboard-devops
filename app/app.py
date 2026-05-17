@@ -1,8 +1,7 @@
 import os
 import json
-import re
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -11,13 +10,12 @@ app = Flask(__name__, static_folder='../frontend-dist', static_url_path='')
 CORS(app)
 
 BASE_DIR       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INVENTORY_YML  = os.path.join(BASE_DIR, 'inventory.yml')
 INVENTORY_JSON = os.path.join(BASE_DIR, 'inventory', 'inventory.json')
 AZURE_CFG      = os.path.join(BASE_DIR, 'inventory', 'azure_config.json')
 PENDING_LOG    = os.path.join(BASE_DIR, 'inventory', 'pending_requests.json')
 
 
-# ── React frontend ────────────────────────────────────────────────────────────
+# ── React frontend ─────────────────────────────────────────────────────────────
 @app.route('/')
 def serve_index():
     return send_from_directory(app.static_folder, 'index.html')
@@ -30,7 +28,7 @@ def serve_static(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 def _azure_credential():
     from azure.identity import ClientSecretCredential
     try:
@@ -76,7 +74,12 @@ def _inv_fallback(error_msg):
             'state': v.get('desired_state', 'offline'), 'azureState': 'fallback',
             'cpu': sp.get('cpu', 2), 'memGb': sp.get('memory_gb', 8),
             'diskGb': sp.get('disk_gb', 30), 'size': sp.get('vm_size', ''),
-            'costHrInr': co.get('hourly_inr', 0), 'monthlyInr': co.get('monthly_inr', 0),
+            'costHrUsd': round(co.get('hourly_inr', 0) / 84.0, 4),
+            'monthlyUsd': round(co.get('monthly_inr', 0) / 84.0, 2),
+            'optimisedMonthlyUsd': round(co.get('optimized_monthly_inr', 0) / 84.0, 2),
+            'savingsUsd': round(co.get('savings_inr', 0) / 84.0, 2),
+            'costHrInr': co.get('hourly_inr', 0),
+            'monthlyInr': co.get('monthly_inr', 0),
             'optimisedMonthlyInr': co.get('optimized_monthly_inr', 0),
             'savingsInr': co.get('savings_inr', 0),
             'contact': v.get('contact', ''), 'unit': v.get('business_unit', ''),
@@ -111,7 +114,7 @@ def get_vms():
         compute = ComputeManagementClient(cred, sub_id)
         inv = _load_inv()
         inv_map = {v['id']: v for v in inv.get('vms', [])}
-        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'excel-dashboard-rg')
+        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'rg-dashboard-demo')
 
         result = []
         for vm in compute.virtual_machines.list(rg):
@@ -120,7 +123,7 @@ def get_vms():
                           for s in iv.statuses if s.code.startswith('PowerState/')), 'unknown')
             state_map = {
                 'running': 'running', 'starting': 'running',
-                'deallocated': 'destroyed', 'deallocating': 'destroyed',
+                'deallocated': 'snoozed', 'deallocating': 'snoozed',
                 'stopped': 'snoozed', 'stopping': 'snoozed',
             }
             our_state = state_map.get(power, 'offline')
@@ -133,7 +136,12 @@ def get_vms():
                 'cpu': sp.get('cpu', 2), 'memGb': sp.get('memory_gb', 8),
                 'diskGb': sp.get('disk_gb', 30),
                 'size': vm.hardware_profile.vm_size if vm.hardware_profile else sp.get('vm_size', ''),
-                'costHrInr': co.get('hourly_inr', 0), 'monthlyInr': co.get('monthly_inr', 0),
+                'costHrUsd': round(co.get('hourly_inr', 0) / 84.0, 4),
+                'monthlyUsd': round(co.get('monthly_inr', 0) / 84.0, 2),
+                'optimisedMonthlyUsd': round(co.get('optimized_monthly_inr', 0) / 84.0, 2),
+                'savingsUsd': round(co.get('savings_inr', 0) / 84.0, 2),
+                'costHrInr': co.get('hourly_inr', 0),
+                'monthlyInr': co.get('monthly_inr', 0),
                 'optimisedMonthlyInr': co.get('optimized_monthly_inr', 0),
                 'savingsInr': co.get('savings_inr', 0),
                 'contact': meta.get('contact', ''), 'unit': meta.get('business_unit', ''),
@@ -189,7 +197,8 @@ def get_pipeline_runs():
         return jsonify({'error': str(e), 'runs': []}), 500
 
 
-# ── GET /api/cost ─────────────────────────────────────────────────────────────
+# ── GET /api/cost ──────────────────────────────────────────────────────────────
+# Returns real Azure cost data in USD: total MTD, daily breakdown, by service
 @app.route('/api/cost')
 def get_cost():
     try:
@@ -197,12 +206,16 @@ def get_cost():
         from azure.mgmt.costmanagement.models import (
             QueryDefinition, QueryTimePeriod, QueryDataset,
             QueryAggregation, QueryGrouping)
+
         cred, sub_id = _azure_credential()
         client = CostManagementClient(cred)
-        now   = datetime.utcnow()
-        start = now.replace(day=1).strftime('%Y-%m-%d')
-        end   = now.strftime('%Y-%m-%d')
-        query = QueryDefinition(
+        now    = datetime.utcnow()
+        start  = now.replace(day=1).strftime('%Y-%m-%d')
+        end    = now.strftime('%Y-%m-%d')
+        scope  = f'/subscriptions/{sub_id}'
+
+        # ── Total MTD by resource group ───────────────────────────────────────
+        q_total = QueryDefinition(
             type='ActualCost', timeframe='Custom',
             time_period=QueryTimePeriod(from_property=start, to=end),
             dataset=QueryDataset(
@@ -210,21 +223,115 @@ def get_cost():
                 aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
                 grouping=[QueryGrouping(type='Dimension', name='ResourceGroupName')]),
         )
-        res = client.query.usage(f'/subscriptions/{sub_id}', query)
-        total_usd = sum(row[0] for row in (res.rows or []))
-        total_inr = round(total_usd * 84.0)
-        return jsonify({'monthlyActualInr': total_inr, 'monthlyActualUsd': round(total_usd, 2),
-                        'currencyRate': 84.0, 'period': f'{start} to {end}',
-                        'synced': datetime.utcnow().isoformat()})
+        res_total = client.query.usage(scope, q_total)
+        by_rg     = {}
+        total_usd = 0.0
+        for row in (res_total.rows or []):
+            cost    = float(row[0])
+            rg_name = str(row[1]) if len(row) > 1 else 'unknown'
+            by_rg[rg_name] = round(cost, 4)
+            total_usd += cost
+        total_usd = round(total_usd, 4)
+
+        # ── Daily breakdown last 30 days ──────────────────────────────────────
+        start_30 = (now - timedelta(days=29)).strftime('%Y-%m-%d')
+        q_daily  = QueryDefinition(
+            type='ActualCost', timeframe='Custom',
+            time_period=QueryTimePeriod(from_property=start_30, to=end),
+            dataset=QueryDataset(
+                granularity='Daily',
+                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
+        )
+        res_daily = client.query.usage(scope, q_daily)
+        daily = []
+        for row in (res_daily.rows or []):
+            cost     = float(row[0])
+            date_val = str(row[1])
+            if len(date_val) == 8:
+                date_val = f'{date_val[:4]}-{date_val[4:6]}-{date_val[6:]}'
+            daily.append({'date': date_val, 'costUsd': round(cost, 4)})
+        daily.sort(key=lambda x: x['date'])
+
+        # ── Cost by service ───────────────────────────────────────────────────
+        q_service = QueryDefinition(
+            type='ActualCost', timeframe='Custom',
+            time_period=QueryTimePeriod(from_property=start, to=end),
+            dataset=QueryDataset(
+                granularity='None',
+                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
+                grouping=[QueryGrouping(type='Dimension', name='ServiceName')]),
+        )
+        res_service = client.query.usage(scope, q_service)
+        by_service  = []
+        for row in (res_service.rows or []):
+            cost = float(row[0])
+            svc  = str(row[1]) if len(row) > 1 else 'Other'
+            if cost > 0.0001:
+                by_service.append({'service': svc, 'costUsd': round(cost, 4)})
+        by_service.sort(key=lambda x: x['costUsd'], reverse=True)
+
+        # ── Last month total ──────────────────────────────────────────────────
+        first_this      = now.replace(day=1)
+        lm_end          = (first_this - timedelta(days=1)).strftime('%Y-%m-%d')
+        lm_start        = (first_this - timedelta(days=1)).replace(day=1).strftime('%Y-%m-%d')
+        q_last          = QueryDefinition(
+            type='ActualCost', timeframe='Custom',
+            time_period=QueryTimePeriod(from_property=lm_start, to=lm_end),
+            dataset=QueryDataset(
+                granularity='None',
+                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
+        )
+        res_last      = client.query.usage(scope, q_last)
+        last_month_usd = round(sum(float(r[0]) for r in (res_last.rows or [])), 4)
+
+        # ── Project full-month spend ──────────────────────────────────────────
+        day_of_month   = max(now.day, 1)
+        import calendar
+        days_in_month  = calendar.monthrange(now.year, now.month)[1]
+        projected_usd  = round((total_usd / day_of_month) * days_in_month, 4)
+        mom_change_pct = round(((projected_usd - last_month_usd) / max(last_month_usd, 0.01)) * 100, 1) if last_month_usd > 0 else 0
+
+        return jsonify({
+            'currency':         'USD',
+            'period':           f'{start} to {end}',
+            'totalMtdUsd':      total_usd,
+            'projectedMonthUsd': projected_usd,
+            'lastMonthUsd':     last_month_usd,
+            'momChangePct':     mom_change_pct,
+            'byResourceGroup':  by_rg,
+            'dailyBreakdown':   daily,
+            'byService':        by_service[:10],
+            'synced':           datetime.utcnow().isoformat(),
+            'live':             True,
+        })
+
     except ImportError:
-        return jsonify({'error': 'azure-mgmt-costmanagement not installed'}), 503
+        return jsonify({'error': 'azure-mgmt-costmanagement not installed', 'live': False}), 503
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Graceful fallback — still returns valid shape so frontend renders
+        try:
+            inv = _load_inv()
+            cs  = inv.get('total_cost_summary', {})
+            return jsonify({
+                'currency':          'USD',
+                'period':            'fallback',
+                'totalMtdUsd':       round(cs.get('monthly_optimized_inr', 0) / 84.0, 2),
+                'projectedMonthUsd': round(cs.get('monthly_unoptimized_inr', 0) / 84.0, 2),
+                'lastMonthUsd':      0,
+                'momChangePct':      0,
+                'byResourceGroup':   {},
+                'dailyBreakdown':    [],
+                'byService':         [],
+                'synced':            datetime.utcnow().isoformat(),
+                'live':              False,
+                'error':             str(e),
+            })
+        except Exception:
+            return jsonify({'error': str(e), 'live': False}), 500
 
 
 # ── POST /api/vms/<vm_id>/request-state ──────────────────────────────────────
-# Does NOT auto-push to git. Saves request to pending_requests.json.
-# Admin reviews and triggers pipeline manually via git push.
 @app.route('/api/vms/<vm_id>/request-state', methods=['POST'])
 def request_vm_state(vm_id):
     try:
@@ -233,23 +340,18 @@ def request_vm_state(vm_id):
         if new_state not in {'running', 'snoozed', 'destroyed'}:
             return jsonify({'error': f'Invalid state "{new_state}"'}), 400
 
-        # ── Load existing pending requests ────────────────────────────────────
         try:
             with open(PENDING_LOG) as f:
                 pending = json.load(f)
         except Exception:
             pending = []
 
-        # ── Append new request entry ──────────────────────────────────────────
-        entry = {
+        pending.append({
             'vm_id':        vm_id,
             'new_state':    new_state,
             'requested_at': datetime.utcnow().isoformat(),
             'status':       'pending',
-        }
-        pending.append(entry)
-
-        # ── Save pending log ──────────────────────────────────────────────────
+        })
         os.makedirs(os.path.dirname(PENDING_LOG), exist_ok=True)
         with open(PENDING_LOG, 'w') as f:
             json.dump(pending, f, indent=2)
@@ -258,19 +360,14 @@ def request_vm_state(vm_id):
             'accepted':       True,
             'vm':             vm_id,
             'requestedState': new_state,
-            'message': (
-                f'Your request to set {vm_id} to "{new_state}" has been logged. '
-                f'The admin will review and trigger the pipeline via a git push.'
-            ),
-            'adminAction': 'pending',
+            'message':        f'Request logged. Admin will trigger pipeline via git push.',
+            'adminAction':    'pending',
         })
-
     except Exception as e:
         return jsonify({'error': str(e), 'accepted': False}), 500
 
 
 # ── GET /api/vms/pending-requests ────────────────────────────────────────────
-# Admin endpoint — view all pending state change requests
 @app.route('/api/vms/pending-requests')
 def get_pending_requests():
     try:

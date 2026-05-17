@@ -4,9 +4,7 @@ pandas
 openpyxl
 plotly
 pyyaml
+azure-identity
+azure-mgmt-compute
+azure-mgmt-costmanagement
 requests
-azure-mgmt-compute==30.6.0
-azure-mgmt-costmanagement==4.0.1
-azure-identity==1.17.1
-azure-mgmt-resource==23.1.1
-gitpython
