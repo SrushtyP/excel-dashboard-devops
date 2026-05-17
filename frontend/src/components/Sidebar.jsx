@@ -59,7 +59,6 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
                 {/* Pending badge */}
                 {isPending && (
                   <motion.span
-                    initial={{ scale: 0 }} animate={{ scale: 1 }}
                     className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center px-1"
                     animate={{ scale: [1, 1.15, 1] }}
                     transition={{ duration: 1.5, repeat: Infinity }}>
