@@ -377,5 +377,36 @@ def get_pending_requests():
         return jsonify([])
 
 
+
+# ── GET /api/monitor/logs ─────────────────────────────────────────────────────
+# Returns Azure Activity Log entries for the resource group
+@app.route('/api/monitor/logs')
+def get_monitor_logs():
+    try:
+        from azure.mgmt.monitor import MonitorManagementClient
+        cred, sub_id = _azure_credential()
+        client = MonitorManagementClient(cred, sub_id)
+        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'rg-dashboard-demo')
+        now   = datetime.utcnow()
+        start = (now - timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end   = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        filter_str = f"eventTimestamp ge '{start}' and eventTimestamp le '{end}' and resourceGroupName eq '{rg}'"
+        events = list(client.activity_logs.list(filter=filter_str, select='eventTimestamp,level,operationName,resourceId,caller,status'))
+        entries = []
+        for e in events[:50]:
+            entries.append({
+                'timestamp':  e.event_timestamp.strftime('%Y-%m-%d %H:%M') if e.event_timestamp else '—',
+                'level':      e.level.value if e.level else 'Information',
+                'operation':  e.operation_name.localized_value if e.operation_name else '—',
+                'resource':   e.resource_id.split('/')[-1] if e.resource_id else '—',
+                'caller':     e.caller or '—',
+                'status':     e.status.localized_value if e.status else '—',
+            })
+        return jsonify({'entries': entries, 'synced': datetime.utcnow().isoformat(), 'live': True})
+    except ImportError:
+        return jsonify({'entries': [], 'live': False, 'error': 'azure-mgmt-monitor not installed'})
+    except Exception as e:
+        return jsonify({'entries': [], 'live': False, 'error': str(e)})
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80, debug=False)

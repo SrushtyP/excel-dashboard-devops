@@ -59,6 +59,8 @@ export default function VMStateOverlay({ vm, targetState, onComplete }) {
   const [polling, setPolling] = useState(false)
   const [apiError, setApiError] = useState(null)
   const intervalRef = useRef(null)
+  // Record when overlay opened — only show runs started AFTER this moment
+  const openedAt = useRef(new Date().toISOString())
 
   useEffect(() => {
     if (!cfg) return
@@ -71,10 +73,14 @@ export default function VMStateOverlay({ vm, targetState, onComplete }) {
         if (data.error) { setApiError(data.error); clearInterval(intervalRef.current); return }
         const runs = data.runs || []
         if (runs.length === 0) return
-        const latest = runs[0]
-        setPipelineRun(latest)
+
+        // Only show a run that started AFTER this overlay was opened
+        const newRun = runs.find(r => r.startedAt && r.startedAt > openedAt.current)
+        if (!newRun) return  // no new pipeline yet — keep waiting
+
+        setPipelineRun(newRun)
         setPolling(true)
-        if (['success', 'failure', 'cancelled'].includes(latest.status)) {
+        if (['success', 'failure', 'cancelled'].includes(newRun.status)) {
           clearInterval(intervalRef.current)
           setPolling(false)
         }
@@ -84,7 +90,7 @@ export default function VMStateOverlay({ vm, targetState, onComplete }) {
       }
     }
 
-    const firstTimer = setTimeout(fetchLatestRun, 3000)
+    const firstTimer = setTimeout(fetchLatestRun, 5000)
     intervalRef.current = setInterval(fetchLatestRun, 8000)
     return () => { clearTimeout(firstTimer); clearInterval(intervalRef.current) }
   }, [targetState])
