@@ -92,7 +92,7 @@ jobs:
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
             azureuser@${{ steps.get_ips.outputs.ip_running }} \
-            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml"
+            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml azure-identity azure-mgmt-compute azure-mgmt-costmanagement requests"
 
       - name: Package frontend source
         run: |
