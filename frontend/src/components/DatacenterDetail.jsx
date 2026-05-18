@@ -1,17 +1,27 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import RackSection from './RackSection'
+import VMActionPanel from './VMActionPanel'
 
 export default function DatacenterDetail({ dc, onClose, onRequestStateChange }) {
-  const allVms    = dc.racks.flatMap(r => r.vms)
-  const running   = allVms.filter(v => v.state === 'running').length
-  const snoozed   = allVms.filter(v => v.state === 'snoozed').length
-  const destroyed = allVms.filter(v => v.state === 'destroyed').length
+  const [selectedVm, setSelectedVm] = useState(null)
 
-  // USD cost — prefer optimisedMonthlyUsd, fall back to INR/84
+  const allVms        = dc.racks.flatMap(r => r.vms)
+  const running       = allVms.filter(v => v.state === 'running').length
+  const snoozed       = allVms.filter(v => v.state === 'snoozed').length
+  const destroyed     = allVms.filter(v => v.state === 'destroyed').length
   const monthlyCostUsd = allVms.reduce((a, v) => {
-    const usd = v.optimisedMonthlyUsd ?? (v.optimisedMonthlyInr || 0) / 84
-    return a + usd
+    return a + (v.optimisedMonthlyUsd ?? (v.optimisedMonthlyInr||0)/84)
   }, 0)
+
+  function handleSelectVm(vm) {
+    setSelectedVm(prev => prev?.id === vm.id ? null : vm)
+  }
+
+  function handleRequestStateChange(vm, targetState) {
+    setSelectedVm(null)
+    onRequestStateChange(vm, targetState)
+  }
 
   return (
     <div>
@@ -19,15 +29,16 @@ export default function DatacenterDetail({ dc, onClose, onRequestStateChange }) 
       <div className="bg-nouryon-blue rounded-xl px-5 py-4 mb-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-              transition={{ delay: 0.07, type: 'spring', stiffness: 300 }}
+            <motion.div initial={{ scale:0 }} animate={{ scale:1 }}
+              transition={{ delay:0.07, type:'spring', stiffness:300 }}
               className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-xl flex-shrink-0">
               🏢
             </motion.div>
-            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
+            <motion.div initial={{ opacity:0, y:5 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.09 }}>
               <div className="flex items-center gap-2">
                 <h2 className="text-white font-bold text-[16px]">{dc.name}</h2>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${dc.active ? 'bg-nouryon-green text-white' : 'bg-gray-400 text-white'}`}>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase
+                  ${dc.active ? 'bg-nouryon-green text-white' : 'bg-gray-400 text-white'}`}>
                   {dc.active ? 'Active' : 'Planned'}
                 </span>
               </div>
@@ -43,8 +54,8 @@ export default function DatacenterDetail({ dc, onClose, onRequestStateChange }) 
               </div>
             )}
             <motion.button
-              whileHover={{ scale: 1.1, backgroundColor: 'rgba(255,255,255,0.25)' }}
-              whileTap={{ scale: 0.9 }} onClick={onClose}
+              whileHover={{ scale:1.1, backgroundColor:'rgba(255,255,255,0.25)' }}
+              whileTap={{ scale:0.9 }} onClick={onClose}
               className="w-8 h-8 rounded-lg bg-white/15 text-white flex items-center justify-center text-sm">
               ✕
             </motion.button>
@@ -52,21 +63,21 @@ export default function DatacenterDetail({ dc, onClose, onRequestStateChange }) 
         </div>
 
         {dc.active && (
-          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
+          <motion.div initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.14 }}
             className="flex items-center gap-5 mt-3 flex-wrap">
             {running > 0 && (
               <div className="flex items-center gap-1.5">
                 <motion.span className="w-2 h-2 rounded-full bg-nouryon-green flex-shrink-0"
-                  animate={{ boxShadow: ['0 0 0 0 #1EA03C44', '0 0 0 5px #1EA03C00', '0 0 0 0 #1EA03C44'] }}
-                  transition={{ duration: 1.8, repeat: Infinity }} />
+                  animate={{ boxShadow:['0 0 0 0 #1EA03C44','0 0 0 5px #1EA03C00','0 0 0 0 #1EA03C44'] }}
+                  transition={{ duration:1.8, repeat:Infinity }} />
                 <span className="text-[11px] text-blue-100">{running} running</span>
               </div>
             )}
             {snoozed > 0 && (
               <div className="flex items-center gap-1.5">
                 <motion.span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"
-                  animate={{ boxShadow: ['0 0 0 0 #F59E0B44', '0 0 0 5px #F59E0B00', '0 0 0 0 #F59E0B44'] }}
-                  transition={{ duration: 2.5, repeat: Infinity }} />
+                  animate={{ boxShadow:['0 0 0 0 #F59E0B44','0 0 0 5px #F59E0B00','0 0 0 0 #F59E0B44'] }}
+                  transition={{ duration:2.5, repeat:Infinity }} />
                 <span className="text-[11px] text-blue-100">{snoozed} snoozed</span>
               </div>
             )}
@@ -76,18 +87,34 @@ export default function DatacenterDetail({ dc, onClose, onRequestStateChange }) 
                 <span className="text-[11px] text-blue-100">{destroyed} destroyed</span>
               </div>
             )}
-            <span className="text-[11px] text-blue-300 ml-auto">{allVms.filter(v => v.state !== 'offline').length} VMs total</span>
+            <span className="text-[11px] text-blue-300 ml-auto">
+              {allVms.filter(v => v.state !== 'offline').length} VMs total
+            </span>
           </motion.div>
         )}
       </div>
 
-      {/* Racks — stacked vertically so each gets full width */}
+      {/* VM Action Panel — context-sensitive, always visible when DC is open */}
+      {dc.active && (
+        <VMActionPanel
+          selectedVm={selectedVm}
+          onRequestStateChange={handleRequestStateChange}
+          onClear={() => setSelectedVm(null)}
+        />
+      )}
+
+      {/* Racks — stacked vertically for full width */}
       <div className="space-y-4">
         {dc.racks.map((rack, i) => (
           <motion.div key={rack.id}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07 + 0.1, duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
-            <RackSection rack={rack} dcActive={dc.active} onRequestStateChange={onRequestStateChange} />
+            initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+            transition={{ delay:i*0.07+0.1, duration:0.28, ease:[0.22,1,0.36,1] }}>
+            <RackSection
+              rack={rack}
+              dcActive={dc.active}
+              selectedVmId={selectedVm?.id}
+              onSelectVm={handleSelectVm}
+            />
           </motion.div>
         ))}
       </div>
