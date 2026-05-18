@@ -6,6 +6,7 @@ plotly
 pyyaml
 azure-identity
 azure-mgmt-compute
+azure-mgmt-consumption
 azure-mgmt-costmanagement
 azure-mgmt-monitor
 azure-mgmt-advisor

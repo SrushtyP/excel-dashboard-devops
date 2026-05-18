@@ -198,173 +198,101 @@ def get_pipeline_runs():
 
 
 # ── GET /api/cost ─────────────────────────────────────────────────────────────
-# Tries 3 scopes in order:
-#   1. Billing account scope  (works on free trial)
-#   2. Subscription scope     (works on PAYG)
-#   3. Graceful fallback      (inventory estimates)
+# Uses Azure Consumption UsageDetails API — works on FREE TRIAL subscriptions.
+# Unlike CostManagement/query which returns $0 on free trial, this endpoint
+# returns real per-resource usage records for all subscription types.
 @app.route('/api/cost')
 def get_cost():
     import calendar
-    BILLING_ACCOUNT = os.environ.get(
-        'AZURE_BILLING_ACCOUNT',
-        '08939987-cf28-58ff-ed6d-3b121f622150:2b26c114-8654-4813-8f69-40498d10a78d_2019-05-31'
-    )
     try:
-        from azure.mgmt.costmanagement import CostManagementClient
-        from azure.mgmt.costmanagement.models import (
-            QueryDefinition, QueryTimePeriod, QueryDataset,
-            QueryAggregation, QueryGrouping)
-
+        from azure.mgmt.consumption import ConsumptionManagementClient
         cred, sub_id = _azure_credential()
-        client = CostManagementClient(cred)
-        now    = datetime.utcnow()
-        start  = now.replace(day=1).strftime('%Y-%m-%d')
-        end    = now.strftime('%Y-%m-%d')
+        client  = ConsumptionManagementClient(cred, sub_id)
+        now     = datetime.utcnow()
+        # UsageDetails filter — last 30 days
+        start   = (now - timedelta(days=29)).strftime('%Y-%m-%d')
+        end     = now.strftime('%Y-%m-%d')
+        scope   = f'/subscriptions/{sub_id}'
+        filter_ = f"properties/usageStart ge '{start}' AND properties/usageEnd le '{end}'"
 
-        # Try billing scope first, fall back to subscription scope
-        scopes = [
-            f'/providers/Microsoft.Billing/billingAccounts/{BILLING_ACCOUNT}',
-            f'/subscriptions/{sub_id}',
-        ]
+        records = list(client.usage_details.list(scope, filter=filter_))
 
-        def _query(scope, q):
-            return client.query.usage(scope, q)
+        if not records:
+            raise ValueError('No usage records returned — subscription may have no spend yet')
 
-        def _try_scopes(q):
-            last_err = None
-            for scope in scopes:
-                try:
-                    return _query(scope, q), scope
-                except Exception as e:
-                    last_err = e
-            raise last_err
+        total_usd   = 0.0
+        by_rg       = {}
+        by_service  = {}
+        by_resource = {}
+        daily       = {}
 
-        # ── 1. Total MTD by resource group ────────────────────────────────────
-        q_rg = QueryDefinition(
-            type='ActualCost', timeframe='Custom',
-            time_period=QueryTimePeriod(from_property=start, to=end),
-            dataset=QueryDataset(
-                granularity='None',
-                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
-                grouping=[QueryGrouping(type='Dimension', name='ResourceGroupName')]),
-        )
-        res_rg, used_scope = _try_scopes(q_rg)
-        by_rg     = {}
-        total_usd = 0.0
-        for row in (res_rg.rows or []):
-            cost    = float(row[0])
-            rg_name = str(row[1]) if len(row) > 1 else 'unknown'
-            by_rg[rg_name] = round(cost, 4)
-            total_usd += cost
+        for r in records:
+            p = r.properties if hasattr(r, 'properties') else r
+            cost   = float(getattr(p, 'pretax_cost', None) or getattr(p, 'cost', None) or 0)
+            date   = str(getattr(p, 'usage_start', '') or getattr(p, 'date', ''))[:10]
+            rg     = str(getattr(p, 'resource_group', '') or 'unknown').lower()
+            svc    = str(getattr(p, 'consumed_service', '') or getattr(p, 'service_name', '') or 'Other')
+            res    = str(getattr(p, 'resource_name', '') or getattr(p, 'instance_name', '') or 'unknown')
+
+            total_usd         += cost
+            by_rg[rg]          = round(by_rg.get(rg, 0) + cost, 6)
+            by_service[svc]    = round(by_service.get(svc, 0) + cost, 6)
+            by_resource[res]   = round(by_resource.get(res, 0) + cost, 6)
+            if date:
+                daily[date]    = round(daily.get(date, 0) + cost, 6)
+
         total_usd = round(total_usd, 4)
 
-        # ── 2. Daily breakdown ────────────────────────────────────────────────
-        start_30 = (now - timedelta(days=29)).strftime('%Y-%m-%d')
-        q_daily = QueryDefinition(
-            type='ActualCost', timeframe='Custom',
-            time_period=QueryTimePeriod(from_property=start_30, to=end),
-            dataset=QueryDataset(
-                granularity='Daily',
-                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
-        )
-        res_daily, _ = _try_scopes(q_daily)
-        daily = []
-        for row in (res_daily.rows or []):
-            cost     = float(row[0])
-            date_val = str(row[1])
-            if len(date_val) == 8:
-                date_val = f'{date_val[:4]}-{date_val[4:6]}-{date_val[6:]}'
-            daily.append({'date': date_val, 'costUsd': round(cost, 4)})
-        daily.sort(key=lambda x: x['date'])
+        # Daily breakdown sorted
+        daily_list = sorted([{'date': d, 'costUsd': v} for d, v in daily.items()], key=lambda x: x['date'])
 
-        # ── 3. Cost by service ────────────────────────────────────────────────
-        q_svc = QueryDefinition(
-            type='ActualCost', timeframe='Custom',
-            time_period=QueryTimePeriod(from_property=start, to=end),
-            dataset=QueryDataset(
-                granularity='None',
-                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
-                grouping=[QueryGrouping(type='Dimension', name='ServiceName')]),
-        )
-        res_svc, _ = _try_scopes(q_svc)
-        by_service = []
-        for row in (res_svc.rows or []):
-            cost = float(row[0])
-            svc  = str(row[1]) if len(row) > 1 else 'Other'
-            if cost > 0.0001:
-                by_service.append({'service': svc, 'costUsd': round(cost, 4)})
-        by_service.sort(key=lambda x: x['costUsd'], reverse=True)
+        # MTD only (this calendar month)
+        mtd_start   = now.replace(day=1).strftime('%Y-%m-%d')
+        mtd_usd     = sum(v for d, v in daily.items() if d >= mtd_start)
+        mtd_usd     = round(mtd_usd, 4)
 
-        # ── 4. Cost by resource ───────────────────────────────────────────────
-        q_res = QueryDefinition(
-            type='ActualCost', timeframe='Custom',
-            time_period=QueryTimePeriod(from_property=start, to=end),
-            dataset=QueryDataset(
-                granularity='None',
-                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')},
-                grouping=[QueryGrouping(type='Dimension', name='ResourceId')]),
-        )
-        try:
-            res_res, _ = _try_scopes(q_res)
-            by_resource = []
-            for row in (res_res.rows or []):
-                cost     = float(row[0])
-                res_id   = str(row[1]) if len(row) > 1 else 'unknown'
-                res_name = res_id.split('/')[-1] if '/' in res_id else res_id
-                if cost > 0.0001:
-                    by_resource.append({'resource': res_name, 'costUsd': round(cost, 4), 'resourceId': res_id})
-            by_resource.sort(key=lambda x: x['costUsd'], reverse=True)
-        except Exception:
-            by_resource = []
+        # By service sorted
+        svc_list = sorted([{'service': k, 'costUsd': round(v,4)} for k,v in by_service.items() if v > 0.0001],
+                           key=lambda x: x['costUsd'], reverse=True)
 
-        # ── 5. Last month ─────────────────────────────────────────────────────
-        first_this     = now.replace(day=1)
-        lm_end         = (first_this - timedelta(days=1)).strftime('%Y-%m-%d')
-        lm_start       = (first_this - timedelta(days=1)).replace(day=1).strftime('%Y-%m-%d')
-        q_last = QueryDefinition(
-            type='ActualCost', timeframe='Custom',
-            time_period=QueryTimePeriod(from_property=lm_start, to=lm_end),
-            dataset=QueryDataset(
-                granularity='None',
-                aggregation={'totalCost': QueryAggregation(name='Cost', function='Sum')}),
-        )
-        try:
-            res_last, _ = _try_scopes(q_last)
-            last_month_usd = round(sum(float(r[0]) for r in (res_last.rows or [])), 4)
-        except Exception:
-            last_month_usd = 0.0
+        # By resource sorted
+        res_list = sorted([{'resource': k, 'costUsd': round(v,4)} for k,v in by_resource.items() if v > 0.0001],
+                           key=lambda x: x['costUsd'], reverse=True)[:20]
 
-        # ── Projection ────────────────────────────────────────────────────────
+        # Projection
         day_of_month  = max(now.day, 1)
         days_in_month = calendar.monthrange(now.year, now.month)[1]
-        projected_usd = round((total_usd / day_of_month) * days_in_month, 4)
-        mom_pct = round(((projected_usd - last_month_usd) / max(last_month_usd, 0.01)) * 100, 1) if last_month_usd > 0 else 0
+        projected_usd = round((mtd_usd / day_of_month) * days_in_month, 4)
 
         return jsonify({
             'currency':          'USD',
             'period':            f'{start} to {end}',
-            'scopeUsed':         used_scope,
-            'totalMtdUsd':       total_usd,
+            'totalMtdUsd':       mtd_usd,
+            'total30dUsd':       total_usd,
             'projectedMonthUsd': projected_usd,
-            'lastMonthUsd':      last_month_usd,
-            'momChangePct':      mom_pct,
-            'byResourceGroup':   by_rg,
-            'dailyBreakdown':    daily,
-            'byService':         by_service[:10],
-            'byResource':        by_resource[:20],
+            'lastMonthUsd':      0,
+            'momChangePct':      0,
+            'byResourceGroup':   {k: round(v,4) for k,v in by_rg.items()},
+            'dailyBreakdown':    daily_list,
+            'byService':         svc_list[:10],
+            'byResource':        res_list,
             'synced':            datetime.utcnow().isoformat(),
             'live':              True,
+            'source':            'Azure Consumption UsageDetails API',
         })
 
     except ImportError:
-        return jsonify({'error': 'azure-mgmt-costmanagement not installed', 'live': False}), 503
+        return jsonify({'error': 'azure-mgmt-consumption not installed', 'live': False}), 503
     except Exception as e:
+        # Graceful fallback shape so frontend never breaks
         return jsonify({
-            'currency': 'USD', 'period': 'error', 'totalMtdUsd': 0,
+            'currency': 'USD', 'period': 'error',
+            'totalMtdUsd': 0, 'total30dUsd': 0,
             'projectedMonthUsd': 0, 'lastMonthUsd': 0, 'momChangePct': 0,
-            'byResourceGroup': {}, 'dailyBreakdown': [], 'byService': [],
-            'byResource': [], 'live': False, 'error': str(e),
+            'byResourceGroup': {}, 'dailyBreakdown': [],
+            'byService': [], 'byResource': [],
             'synced': datetime.utcnow().isoformat(),
+            'live': False, 'error': str(e),
         })
 
 
