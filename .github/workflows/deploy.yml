@@ -24,7 +24,6 @@ jobs:
           echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
           echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
           echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
-          echo "create_vm_destroyed = false" >> terraform/terraform.tfvars
 
       - name: Terraform Init
         working-directory: terraform
@@ -46,9 +45,8 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-      # ── Get IPs for all provisioned VMs ──────────────────────────────────────
-      - name: Get VM IPs from Terraform
-        id: get_ips
+      - name: Get VM IP from Terraform
+        id: get_ip
         working-directory: terraform
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -67,12 +65,11 @@ jobs:
       - name: Install Ansible and sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
 
-      # ── Ansible inventory: vm-running only (app deploys here) ────────────────
       - name: Create Ansible inventory
         run: |
           cat > ansible/inventory.ini << EOF
           [vm_running]
-          ${{ steps.get_ips.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          ${{ steps.get_ip.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
           EOF
 
       - name: Create azure_config.json
@@ -86,62 +83,53 @@ jobs:
           }
           EOF
 
-      - name: Install Flask on vm-running
+      - name: Install dependencies on VM
         run: |
           sshpass -p "${{ secrets.VM_PASSWORD }}" ssh \
             -o StrictHostKeyChecking=no \
-            azureuser@${{ steps.get_ips.outputs.ip_running }} \
-            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml azure-identity azure-mgmt-compute azure-mgmt-costmanagement requests"
+            azureuser@${{ steps.get_ip.outputs.ip_running }} \
+            "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml requests azure-identity azure-mgmt-compute azure-mgmt-consumption"
 
-      - name: Package frontend source
-        run: |
-          tar --exclude='frontend/node_modules' \
-              --exclude='frontend/dist' \
-              --exclude='frontend/.git' \
-              -czf /tmp/frontend-src.tar.gz \
-              -C frontend .
-
-      # ── Deploy app ONLY to vm-running ─────────────────────────────────────────
-      - name: Deploy app to vm-running
+      - name: Run Ansible Playbook
         run: |
           ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
             --limit vm_running \
             -e "pat_token=${{ secrets.PAT_TOKEN }}" \
-            -e "owner=${{ secrets.OWNER }}"
+            -e "owner=${{ github.repository_owner }}" \
+            -e "repo=excel-dashboard-devops"
 
-      # ── Handle VM states ──────────────────────────────────────────────────────
-      # vm-running  → ensure Flask is running (Ansible)
-      # vm-snoozed  → deallocate via Azure CLI (zero compute cost)
-      # vm-destroyed → already not provisioned (Terraform count=0)
-      - name: Apply VM states
+      - name: Run state playbooks per VM
         run: |
-          # Ensure vm-running Flask is up
-          ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml \
-            --limit vm_running \
-            -e "pat_token=${{ secrets.PAT_TOKEN }}" \
-            -e "owner=${{ secrets.OWNER }}"
-
-          # Deallocate vm-snoozed via Azure CLI
-          az login --service-principal \
-            --username ${{ secrets.AZURE_CLIENT_ID }} \
-            --password ${{ secrets.AZURE_CLIENT_SECRET }} \
-            --tenant ${{ secrets.AZURE_TENANT_ID }}
-
-          az vm deallocate \
-            --resource-group rg-dashboard-demo \
-            --name vm-snoozed \
-            --no-wait
-
-          echo "vm-snoozed deallocated — zero compute cost"
-          echo "vm-destroyed not provisioned — Terraform count=0"
+          while IFS= read -r line; do
+            VM_ID=$(echo "$line" | cut -d'|' -f1)
+            STATE=$(echo "$line" | cut -d'|' -f2)
+            echo "VM: $VM_ID -> $STATE"
+            case "$STATE" in
+              running)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-running.yml
+                ;;
+              snoozed)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-snooze.yml
+                ;;
+              destroyed)
+                ansible-playbook -i ansible/inventory.ini ansible/playbook-destroy.yml
+                ;;
+            esac
+          done < <(python3 -c "
+          import json
+          with open('inventory/inventory.json') as f:
+              d = json.load(f)
+          for vm in d['vms']:
+              print(vm['id'] + '|' + vm['desired_state'])
+          ")
 
       - name: Verify deployment
         run: |
           sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ips.outputs.ip_running }}:80)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ steps.get_ip.outputs.ip_running }})
           if [ "$STATUS" = "200" ]; then
-            echo "App is live at http://${{ steps.get_ips.outputs.ip_running }}:80"
+            echo "✅ App is live at http://${{ steps.get_ip.outputs.ip_running }}"
           else
-            echo "Verification failed - Status: $STATUS"
+            echo "❌ Verification failed - HTTP Status: $STATUS"
             exit 1
           fi
