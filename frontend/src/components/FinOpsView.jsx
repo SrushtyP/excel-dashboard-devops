@@ -193,6 +193,190 @@ function MonitoringView() {
   )
 }
 
+// ── VM Resize Calculator ───────────────────────────────────────────────────────
+// Uses Azure Retail Prices API — public, no auth required
+function ResizeCalculator() {
+  const [region, setRegion]     = useState('southafricanorth')
+  const [families, setFamilies] = useState(new Set(['B','D']))
+  const [items, setItems]       = useState([])
+  const [loading, setLoad]      = useState(false)
+  const [error, setError]       = useState(null)
+  const [selected, setSelected] = useState(null)
+
+  const CURRENT_VM    = 'Standard_B2ats_v2'
+  const CURRENT_PRICE = 0.0122 // $/hr South Africa North
+
+  const toggleFamily = f => {
+    setFamilies(prev => {
+      const next = new Set(prev)
+      next.has(f) ? next.delete(f) : next.add(f)
+      return next
+    })
+  }
+
+  const fetchPrices = async () => {
+    if (!families.size) return
+    setLoad(true); setError(null); setItems([]); setSelected(null)
+    try {
+      const parts  = [...families].map(f => `contains(skuName, ' ${f}') eq true`).join(' or ')
+      const filter = `armRegionName eq '${region}' and priceType eq 'Consumption' and (${parts})`
+      const url    = `https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&$filter=${encodeURIComponent(filter)}&$top=200`
+      const r      = await fetch(url)
+      const data   = await r.json()
+      const seen   = new Set()
+      const result = (data.Items || [])
+        .filter(i =>
+          i.type === 'Consumption' &&
+          !i.skuName.includes('Spot') &&
+          !i.skuName.includes('Low Priority') &&
+          !i.productName.includes('Windows') &&
+          i.retailPrice > 0 &&
+          !seen.has(i.skuName) && seen.add(i.skuName)
+        )
+        .sort((a,b) => a.retailPrice - b.retailPrice)
+        .slice(0, 50)
+      if (!result.length) throw new Error('No prices found — try different families or region')
+      setItems(result)
+    } catch(e) {
+      setError(e.message)
+    } finally {
+      setLoad(false)
+    }
+  }
+
+  const curMonthly = CURRENT_PRICE * 730
+
+  return (
+    <Section title="VM Family Switch & Resize Calculator" badge="Azure Retail Prices API · live · no auth" delay={0.4}>
+      {/* Controls */}
+      <div className="flex flex-wrap gap-4 items-end mb-4">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Region</p>
+          <select value={region} onChange={e=>{setRegion(e.target.value);setItems([])}}
+            className="text-[12px] border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300">
+            <option value="southafricanorth">South Africa North</option>
+            <option value="centralus">Central US</option>
+            <option value="eastus">East US</option>
+            <option value="westeurope">West Europe</option>
+            <option value="southeastasia">Southeast Asia</option>
+            <option value="australiaeast">Australia East</option>
+          </select>
+        </div>
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">VM Families</p>
+          <div className="flex gap-3 flex-wrap">
+            {[['B','Burstable'],['D','General Purpose'],['F','Compute Opt'],['E','Memory Opt']].map(([f,label])=>(
+              <label key={f} className="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={families.has(f)} onChange={()=>toggleFamily(f)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-300" />
+                <span><strong>{f}</strong>-series <span className="text-gray-400">({label})</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <button onClick={fetchPrices} disabled={loading}
+          className="px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-opacity"
+          style={{background:'#1A4780',opacity:loading?0.6:1}}>
+          {loading ? '⟳ Fetching...' : '↻ Fetch Live Prices'}
+        </button>
+      </div>
+
+      {/* Current VM banner */}
+      <div className="mb-3 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-[11px] flex flex-wrap gap-3">
+        <span><strong>Current:</strong> <span className="font-bold text-blue-700">{CURRENT_VM}</span></span>
+        <span><strong>$/hr:</strong> ${CURRENT_PRICE.toFixed(4)}</span>
+        <span><strong>$/mo (730hr):</strong> <span className="font-bold">${curMonthly.toFixed(2)}</span></span>
+        <span><strong>Region:</strong> {region}</span>
+      </div>
+
+      {error && <p className="text-[11px] text-red-600 mb-3">⚠ {error}</p>}
+
+      {/* Pricing table */}
+      {items.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b-2 border-gray-100">
+                {['VM Size','$/hr','$/mo (730hr)','vs Current',''].map(h=>(
+                  <th key={h} className="text-left px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-400">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => {
+                const monthly   = item.retailPrice * 730
+                const diff      = monthly - curMonthly
+                const diffPct   = Math.round((diff / curMonthly) * 100)
+                const isCurrent = item.skuName.toLowerCase().includes('b2ats')
+                const sel       = selected?.skuName === item.skuName
+                return (
+                  <tr key={item.skuName}
+                    className="border-b border-gray-50 transition-colors cursor-pointer"
+                    style={{background: isCurrent ? '#EFF6FF' : sel ? '#F0FDF4' : undefined}}
+                    onMouseEnter={e=>{ if(!isCurrent && !sel) e.currentTarget.style.background='#F9FAFB' }}
+                    onMouseLeave={e=>{ if(!isCurrent && !sel) e.currentTarget.style.background='' }}>
+                    <td className="px-3 py-2 font-semibold" style={{color:isCurrent?'#1A4780':'#222'}}>
+                      {item.skuName}{isCurrent?' ⭐':''}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-gray-600">${item.retailPrice.toFixed(4)}</td>
+                    <td className="px-3 py-2 font-bold" style={{color:'#1A4780'}}>${monthly.toFixed(2)}</td>
+                    <td className="px-3 py-2">
+                      {isCurrent
+                        ? <span className="text-[10px] font-bold text-blue-600">● Active</span>
+                        : diff < 0
+                          ? <span className="font-bold text-green-700">↓ ${Math.abs(diff).toFixed(2)}/mo ({Math.abs(diffPct)}% cheaper)</span>
+                          : <span className="text-red-600">↑ ${diff.toFixed(2)}/mo (+{diffPct}%)</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {!isCurrent && (
+                        <button onClick={()=>setSelected(item)}
+                          className="px-2.5 py-1 text-[10px] font-semibold text-white rounded-md"
+                          style={{background:'#1A4780'}}>
+                          Select
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Resize impact summary */}
+      {selected && (
+        <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
+          className="mt-4 p-4 rounded-xl border"
+          style={{background:'#F0FDF4',borderColor:'#BBF7D0'}}>
+          <p className="text-[10px] font-black uppercase tracking-widest text-green-700 mb-3">📊 Resize Impact Summary</p>
+          <div className="flex flex-wrap gap-5 text-[12px]">
+            <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.skuName}</strong></div>
+            <div><span className="text-gray-500">New cost:</span> <strong>${selected.retailPrice.toFixed(4)}/hr · ${(selected.retailPrice*730).toFixed(2)}/mo</strong></div>
+            <div><span className="text-gray-500">Current:</span> ${CURRENT_PRICE.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</div>
+            {(() => {
+              const saving = curMonthly - selected.retailPrice*730
+              const pct    = Math.round((saving/curMonthly)*100)
+              return saving >= 0
+                ? <div className="font-bold text-green-700">📈 Save ${saving.toFixed(2)}/mo · ${(saving*12).toFixed(2)}/yr ({pct}% cheaper)</div>
+                : <div className="font-bold text-red-600">📉 +${Math.abs(saving).toFixed(2)}/mo additional cost (+{Math.abs(pct)}%)</div>
+            })()}
+          </div>
+          <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
+            ℹ To apply: update <code className="bg-gray-100 px-1 rounded">variable "vm_size"</code> default in <code className="bg-gray-100 px-1 rounded">terraform/variables.tf</code> and push to <code className="bg-gray-100 px-1 rounded">main</code>
+          </p>
+        </motion.div>
+      )}
+
+      {!items.length && !loading && !error && (
+        <p className="text-[11px] text-gray-400 text-center py-6">
+          Select VM families and click <strong>Fetch Live Prices</strong> to compare real Azure costs
+        </p>
+      )}
+    </Section>
+  )
+}
+
 // ── Main FinOps View ───────────────────────────────────────────────────────────
 export default function FinOpsView({ datacenters }) {
   const [cost, setCost]       = useState(null)
@@ -454,6 +638,9 @@ export default function FinOpsView({ datacenters }) {
                   ))}
                 </div>
               </motion.div>
+
+              {/* VM Resize Calculator */}
+              <ResizeCalculator />
             </motion.div>
           )}
 

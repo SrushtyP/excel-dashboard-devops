@@ -163,14 +163,15 @@
 
     - name: Kill existing Flask process
       shell: |
-        kill $(cat /tmp/flask.pid) 2>/dev/null || true
+        sudo kill $(cat /tmp/flask.pid) 2>/dev/null || true
+        sudo pkill -f "python3 app.py" 2>/dev/null || true
       ignore_errors: yes
 
-    # ✅ Start Flask with PAT_TOKEN, OWNER, REPO and AZURE env vars
+    # ✅ Start Flask with sudo (required for port 80) + env vars
     - name: Start Flask app in background
       shell: |
         cd {{ app_dir }} && \
-        PAT_TOKEN="{{ pat_token }}" \
+        sudo PAT_TOKEN="{{ pat_token }}" \
         OWNER="{{ owner }}" \
         REPO="{{ repo }}" \
         AZURE_RESOURCE_GROUP="rg-dashboard-demo" \

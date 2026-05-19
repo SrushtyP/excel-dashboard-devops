@@ -322,99 +322,10 @@ def get_cost():
 
 
 
-@app.route('/api/cost')
-def get_cost():
-    import calendar
-    try:
-        from azure.mgmt.consumption import ConsumptionManagementClient
-        cred, sub_id = _azure_credential()
-        client  = ConsumptionManagementClient(cred, sub_id)
-        now     = datetime.utcnow()
-        # UsageDetails filter — last 30 days
-        start   = (now - timedelta(days=29)).strftime('%Y-%m-%d')
-        end     = now.strftime('%Y-%m-%d')
-        scope   = f'/subscriptions/{sub_id}'
-        filter_ = f"properties/usageStart ge '{start}' AND properties/usageEnd le '{end}'"
-
-        records = list(client.usage_details.list(scope, filter=filter_))
-
-        if not records:
-            raise ValueError('No usage records returned — subscription may have no spend yet')
-
-        total_usd   = 0.0
-        by_rg       = {}
-        by_service  = {}
-        by_resource = {}
-        daily       = {}
-
-        for r in records:
-            p = r.properties if hasattr(r, 'properties') else r
-            cost   = float(getattr(p, 'pretax_cost', None) or getattr(p, 'cost', None) or 0)
-            date   = str(getattr(p, 'usage_start', '') or getattr(p, 'date', ''))[:10]
-            rg     = str(getattr(p, 'resource_group', '') or 'unknown').lower()
-            svc    = str(getattr(p, 'consumed_service', '') or getattr(p, 'service_name', '') or 'Other')
-            res    = str(getattr(p, 'resource_name', '') or getattr(p, 'instance_name', '') or 'unknown')
-
-            total_usd         += cost
-            by_rg[rg]          = round(by_rg.get(rg, 0) + cost, 6)
-            by_service[svc]    = round(by_service.get(svc, 0) + cost, 6)
-            by_resource[res]   = round(by_resource.get(res, 0) + cost, 6)
-            if date:
-                daily[date]    = round(daily.get(date, 0) + cost, 6)
-
-        total_usd = round(total_usd, 4)
-
-        # Daily breakdown sorted
-        daily_list = sorted([{'date': d, 'costUsd': v} for d, v in daily.items()], key=lambda x: x['date'])
-
-        # MTD only (this calendar month)
-        mtd_start   = now.replace(day=1).strftime('%Y-%m-%d')
-        mtd_usd     = sum(v for d, v in daily.items() if d >= mtd_start)
-        mtd_usd     = round(mtd_usd, 4)
-
-        # By service sorted
-        svc_list = sorted([{'service': k, 'costUsd': round(v,4)} for k,v in by_service.items() if v > 0.0001],
-                           key=lambda x: x['costUsd'], reverse=True)
-
-        # By resource sorted
-        res_list = sorted([{'resource': k, 'costUsd': round(v,4)} for k,v in by_resource.items() if v > 0.0001],
-                           key=lambda x: x['costUsd'], reverse=True)[:20]
-
-        # Projection
-        day_of_month  = max(now.day, 1)
-        days_in_month = calendar.monthrange(now.year, now.month)[1]
-        projected_usd = round((mtd_usd / day_of_month) * days_in_month, 4)
-
-        return jsonify({
-            'currency':          'USD',
-            'period':            f'{start} to {end}',
-            'totalMtdUsd':       mtd_usd,
-            'total30dUsd':       total_usd,
-            'projectedMonthUsd': projected_usd,
-            'lastMonthUsd':      0,
-            'momChangePct':      0,
-            'byResourceGroup':   {k: round(v,4) for k,v in by_rg.items()},
-            'dailyBreakdown':    daily_list,
-            'byService':         svc_list[:10],
-            'byResource':        res_list,
-            'synced':            datetime.utcnow().isoformat(),
-            'live':              True,
-            'source':            'Azure Consumption UsageDetails API',
-        })
-
-    except ImportError:
-        return jsonify({'error': 'azure-mgmt-consumption not installed', 'live': False}), 503
-    except Exception as e:
-        # Graceful fallback shape so frontend never breaks
-        return jsonify({
-            'currency': 'USD', 'period': 'error',
-            'totalMtdUsd': 0, 'total30dUsd': 0,
-            'projectedMonthUsd': 0, 'lastMonthUsd': 0, 'momChangePct': 0,
-            'byResourceGroup': {}, 'dailyBreakdown': [],
-            'byService': [], 'byResource': [],
-            'synced': datetime.utcnow().isoformat(),
-            'live': False, 'error': str(e),
-        })
+@app.route('/api/costs')
+def get_costs():
+    """Alias — so both /api/cost and /api/costs work"""
+    return get_cost()
 
 
 # ── GET /api/advisor ───────────────────────────────────────────────────────────
