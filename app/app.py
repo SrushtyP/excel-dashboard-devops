@@ -198,9 +198,130 @@ def get_pipeline_runs():
 
 
 # ── GET /api/cost ─────────────────────────────────────────────────────────────
-# Uses Azure Consumption UsageDetails API — works on FREE TRIAL subscriptions.
-# Unlike CostManagement/query which returns $0 on free trial, this endpoint
-# returns real per-resource usage records for all subscription types.
+# Uses Azure REST API directly with bearer token — same approach as the old
+# HTML app that successfully returned real cost data on free trial.
+# No SDK needed: just requests + oauth2 token + management.azure.com endpoints.
+@app.route('/api/cost')
+def get_cost():
+    import calendar
+    try:
+        # ── Step 1: get bearer token via client_credentials ───────────────────
+        with open(AZURE_CFG) as f:
+            cfg = json.load(f)
+        tenant_id     = cfg['tenant_id'].strip()
+        client_id     = cfg['client_id'].strip()
+        client_secret = cfg['client_secret'].strip()
+        sub_id        = cfg['subscription_id'].strip()
+
+        token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/token'
+        token_res = requests.post(token_url, data={
+            'grant_type':    'client_credentials',
+            'client_id':     client_id,
+            'client_secret': client_secret,
+            'resource':      'https://management.azure.com/',
+        }, timeout=15)
+        token_res.raise_for_status()
+        bearer = token_res.json()['access_token']
+        headers = {'Authorization': f'Bearer {bearer}', 'Content-Type': 'application/json'}
+
+        now       = datetime.utcnow()
+        mtd_start = now.replace(day=1).strftime('%Y-%m-%d')
+        start_30  = (now - __import__('datetime').timedelta(days=29)).strftime('%Y-%m-%d')
+        end_date  = now.strftime('%Y-%m-%d')
+
+        # ── Step 2: Cost Management Query API (same endpoint old app used) ─────
+        scope     = f'/subscriptions/{sub_id}'
+        query_url = f'https://management.azure.com{scope}/providers/Microsoft.CostManagement/query?api-version=2023-11-01'
+
+        # Query 1: MTD total by resource group
+        q_rg = {
+            'type': 'ActualCost', 'timeframe': 'Custom',
+            'timePeriod': {'from': mtd_start, 'to': end_date},
+            'dataset': {
+                'granularity': 'None',
+                'aggregation': {'totalCost': {'name': 'Cost', 'function': 'Sum'}},
+                'grouping': [{'type': 'Dimension', 'name': 'ResourceGroupName'}],
+            }
+        }
+        r_rg = requests.post(query_url, headers=headers, json=q_rg, timeout=20)
+
+        # Query 2: Daily trend last 30 days
+        q_daily = {
+            'type': 'ActualCost', 'timeframe': 'Custom',
+            'timePeriod': {'from': start_30, 'to': end_date},
+            'dataset': {
+                'granularity': 'Daily',
+                'aggregation': {'totalCost': {'name': 'Cost', 'function': 'Sum'}},
+            }
+        }
+        r_daily = requests.post(query_url, headers=headers, json=q_daily, timeout=20)
+
+        # ── Step 3: Parse results ─────────────────────────────────────────────
+        total_mtd = 0.0
+        by_rg     = {}
+        if r_rg.ok:
+            rg_data = r_rg.json()
+            cols    = [c['name'].lower() for c in rg_data.get('properties', {}).get('columns', [])]
+            cost_i  = next((i for i,c in enumerate(cols) if 'cost' in c), 0)
+            rg_i    = next((i for i,c in enumerate(cols) if 'resource' in c), 1)
+            for row in rg_data.get('properties', {}).get('rows', []):
+                cost = float(row[cost_i] or 0)
+                rg   = str(row[rg_i] or 'unknown').lower()
+                total_mtd       += cost
+                by_rg[rg]        = round(by_rg.get(rg, 0) + cost, 4)
+
+        daily_list = []
+        if r_daily.ok:
+            d_data = r_daily.json()
+            cols   = [c['name'].lower() for c in d_data.get('properties', {}).get('columns', [])]
+            cost_i = next((i for i,c in enumerate(cols) if 'cost' in c), 0)
+            date_i = next((i for i,c in enumerate(cols) if 'date' in c or 'usage' in c), 1)
+            for row in d_data.get('properties', {}).get('rows', []):
+                cost    = float(row[cost_i] or 0)
+                raw_d   = str(row[date_i])
+                date_str = f'{raw_d[:4]}-{raw_d[4:6]}-{raw_d[6:8]}' if len(raw_d) == 8 else raw_d[:10]
+                daily_list.append({'date': date_str, 'costUsd': round(cost, 4)})
+            daily_list.sort(key=lambda x: x['date'])
+
+        total_mtd        = round(total_mtd, 4)
+        day_of_month     = max(now.day, 1)
+        days_in_month    = calendar.monthrange(now.year, now.month)[1]
+        projected_usd    = round((total_mtd / day_of_month) * days_in_month, 4)
+
+        return jsonify({
+            'currency':          'USD',
+            'period':            f'{mtd_start} to {end_date}',
+            'totalMtdUsd':       total_mtd,
+            'total30dUsd':       total_mtd,
+            'projectedMonthUsd': projected_usd,
+            'lastMonthUsd':      0,
+            'momChangePct':      0,
+            'byResourceGroup':   by_rg,
+            'dailyBreakdown':    daily_list,
+            'byService':         [],
+            'byResource':        [],
+            'synced':            datetime.utcnow().isoformat(),
+            'live':              True,
+            'source':            'Azure Cost Management REST API (bearer token)',
+            'debug': {
+                'rg_status':    r_rg.status_code if r_rg else 'n/a',
+                'daily_status': r_daily.status_code if r_daily else 'n/a',
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'currency': 'USD', 'period': 'error',
+            'totalMtdUsd': 0, 'total30dUsd': 0,
+            'projectedMonthUsd': 0, 'lastMonthUsd': 0, 'momChangePct': 0,
+            'byResourceGroup': {}, 'dailyBreakdown': [],
+            'byService': [], 'byResource': [],
+            'synced': datetime.utcnow().isoformat(),
+            'live': False, 'error': str(e),
+        })
+
+
+
 @app.route('/api/cost')
 def get_cost():
     import calendar
