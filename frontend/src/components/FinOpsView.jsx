@@ -135,63 +135,6 @@ function VMDetail({ vm, onClose }) {
   )
 }
 
-// ── Azure Monitor Logs ─────────────────────────────────────────────────────────
-function MonitoringView() {
-  const [logs, setLogs]   = useState(null)
-  const [loading, setLoad] = useState(true)
-  const [error, setError]  = useState(null)
-
-  useEffect(() => {
-    fetch('/api/monitor/logs')
-      .then(r => r.json())
-      .then(d => { setLogs(d); setLoad(false) })
-      .catch(() => { setError('Monitor API not available'); setLoad(false) })
-  }, [])
-
-  const LEVEL_COLOR = { Critical:'#BE0032', Error:'#BE0032', Warning:'#D97706', Information:'#1A4780', Verbose:'#9CA3AF' }
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-24">
-      <motion.div className="w-5 h-5 rounded-full border-2 border-gray-200" style={{borderTopColor:'#1A4780'}}
-        animate={{rotate:360}} transition={{duration:1,repeat:Infinity,ease:'linear'}} />
-    </div>
-  )
-
-  if (error || !logs?.entries?.length) return (
-    <div className="p-4 rounded-lg bg-gray-50 border border-gray-100 text-center">
-      <p className="text-[11px] text-gray-500 font-semibold mb-1">
-        {error || 'No logs available'}
-      </p>
-      <p className="text-[10px] text-gray-400">
-        Install <code className="bg-gray-100 px-1 rounded">azure-mgmt-monitor</code> and add
-        a Log Analytics workspace to enable live VM activity logs.
-      </p>
-    </div>
-  )
-
-  return (
-    <div className="space-y-1.5 max-h-64 overflow-y-auto">
-      {logs.entries.map((e,i) => (
-        <motion.div key={i} initial={{opacity:0,x:-4}} animate={{opacity:1,x:0}} transition={{delay:i*0.03}}
-          className="flex items-start gap-2.5 p-2.5 rounded-lg border"
-          style={{background:i%2===0?'#FAFAFA':'#fff',borderColor:'#F0F0F0'}}>
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1" style={{background:LEVEL_COLOR[e.level]||'#9CA3AF'}} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-semibold text-gray-700 truncate">{e.operation}</span>
-              <span className="text-[9px] text-gray-400 flex-shrink-0">{e.timestamp}</span>
-            </div>
-            <p className="text-[10px] text-gray-500 truncate mt-0.5">{e.resource} · {e.caller}</p>
-          </div>
-          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
-            style={{background:(LEVEL_COLOR[e.level]||'#9CA3AF')+'18',color:LEVEL_COLOR[e.level]||'#9CA3AF'}}>
-            {e.level}
-          </span>
-        </motion.div>
-      ))}
-    </div>
-  )
-}
 
 // ── VM Resize Calculator ───────────────────────────────────────────────────────
 // Uses Azure Retail Prices API — public, no auth required
