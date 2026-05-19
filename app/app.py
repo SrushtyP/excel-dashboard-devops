@@ -536,17 +536,19 @@ def admin_action_request():
 @app.route('/api/pricing')
 def get_pricing():
     try:
-        filter_str = request.args.get('$filter', '')
-        top        = request.args.get('$top', '100')
-        url = (
-            f'https://prices.azure.com/api/retail/prices'
-            f'?api-version=2023-01-01-preview'
-            f'&$filter={filter_str}'
-            f'&$top={top}'
-        )
-        r = requests.get(url, timeout=15)
+        # Use query_string directly to avoid Flask mangling $filter/$top keys
+        qs       = request.query_string.decode('utf-8')
+        url      = f'https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&{qs}'
+        headers  = {'Accept': 'application/json'}
+        r        = requests.get(url, headers=headers, timeout=20)
         r.raise_for_status()
-        return jsonify(r.json())
+        data     = r.json()
+        items    = data.get('Items', data.get('items', []))
+        return jsonify({'Items': items, 'Count': len(items), 'NextPageLink': data.get('NextPageLink')})
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Azure Prices API timed out', 'Items': []}), 504
+    except requests.exceptions.HTTPError as e:
+        return jsonify({'error': f'Azure Prices API error: {e.response.status_code}', 'Items': []}), 502
     except Exception as e:
         return jsonify({'error': str(e), 'Items': []}), 500
 

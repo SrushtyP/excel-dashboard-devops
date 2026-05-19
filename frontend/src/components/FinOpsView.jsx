@@ -218,26 +218,41 @@ function ResizeCalculator() {
     if (!families.size) return
     setLoad(true); setError(null); setItems([]); setSelected(null)
     try {
-      const parts  = [...families].map(f => `contains(skuName, ' ${f}') eq true`).join(' or ')
-      const filter = `armRegionName eq '${region}' and priceType eq 'Consumption' and (${parts})`
+      // Use armSkuName contains 'Standard_X' — reliable family matching
+      // Also restrict to Virtual Machines service to avoid DB/Storage noise
+      const familyParts = [...families].map(f =>
+        `contains(armSkuName, 'Standard_${f}')`
+      ).join(' or ')
+
+      const filter = `armRegionName eq '${region}' and serviceName eq 'Virtual Machines' and priceType eq 'Consumption' and (${familyParts})`
 
       // Call Flask proxy — avoids CORS from browser to prices.azure.com
       const url  = `/api/pricing?$filter=${encodeURIComponent(filter)}&$top=200`
       const r    = await fetch(url)
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${r.status} from /api/pricing`)
+      }
+
       const data = await r.json()
+      if (data.error) throw new Error(data.error)
+
+      // Filter: Linux only (no Windows), no Spot, no Low Priority, deduplicate by armSkuName
       const seen   = new Set()
       const result = (data.Items || [])
-        .filter(i =>
-          i.type === 'Consumption' &&
-          !i.skuName.includes('Spot') &&
-          !i.skuName.includes('Low Priority') &&
-          !i.productName.includes('Windows') &&
-          i.retailPrice > 0 &&
-          !seen.has(i.skuName) && seen.add(i.skuName)
+        .filter(item =>
+          item.retailPrice > 0 &&
+          item.armSkuName &&
+          !item.productName?.includes('Windows') &&
+          !item.skuName?.includes('Spot') &&
+          !item.skuName?.includes('Low Priority') &&
+          !seen.has(item.armSkuName) && seen.add(item.armSkuName)
         )
-        .sort((a,b) => a.retailPrice - b.retailPrice)
+        .sort((a, b) => a.retailPrice - b.retailPrice)
         .slice(0, 50)
-      if (!result.length) throw new Error('No prices found — try different families or region')
+
+      if (!result.length) throw new Error('No Linux VM prices found for selected families in this region. Try B+D families.')
       setItems(result)
     } catch(e) {
       setError(e.message)
@@ -291,7 +306,17 @@ function ResizeCalculator() {
         <span><strong>Region:</strong> {region}</span>
       </div>
 
-      {error && <p className="text-[11px] text-red-600 mb-3">⚠ {error}</p>}
+      {error && (
+        <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-100">
+          <p className="text-[11px] text-red-600 font-semibold">⚠ {error}</p>
+          {error.includes('fetch') && (
+            <p className="text-[10px] text-red-400 mt-1">
+              Flask proxy at <code className="bg-red-100 px-1 rounded">/api/pricing</code> not reachable —
+              make sure the latest <code className="bg-red-100 px-1 rounded">app.py</code> is deployed and Flask is running.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Pricing table */}
       {items.length > 0 && (
@@ -309,16 +334,16 @@ function ResizeCalculator() {
                 const monthly   = item.retailPrice * 730
                 const diff      = monthly - curMonthly
                 const diffPct   = Math.round((diff / curMonthly) * 100)
-                const isCurrent = item.skuName.toLowerCase().includes('b2ats')
-                const sel       = selected?.skuName === item.skuName
+                const isCurrent = item.armSkuName === 'Standard_B2ats_v2'
+                const sel       = selected?.armSkuName === item.armSkuName
                 return (
-                  <tr key={item.skuName}
+                  <tr key={item.armSkuName || item.skuName}
                     className="border-b border-gray-50 transition-colors cursor-pointer"
                     style={{background: isCurrent ? '#EFF6FF' : sel ? '#F0FDF4' : undefined}}
                     onMouseEnter={e=>{ if(!isCurrent && !sel) e.currentTarget.style.background='#F9FAFB' }}
                     onMouseLeave={e=>{ if(!isCurrent && !sel) e.currentTarget.style.background='' }}>
                     <td className="px-3 py-2 font-semibold" style={{color:isCurrent?'#1A4780':'#222'}}>
-                      {item.skuName}{isCurrent?' ⭐':''}
+                      {item.armSkuName || item.skuName}{isCurrent?' ⭐':''}
                     </td>
                     <td className="px-3 py-2 font-mono text-gray-600">${item.retailPrice.toFixed(4)}</td>
                     <td className="px-3 py-2 font-bold" style={{color:'#1A4780'}}>${monthly.toFixed(2)}</td>
@@ -353,7 +378,7 @@ function ResizeCalculator() {
           style={{background:'#F0FDF4',borderColor:'#BBF7D0'}}>
           <p className="text-[10px] font-black uppercase tracking-widest text-green-700 mb-3">📊 Resize Impact Summary</p>
           <div className="flex flex-wrap gap-5 text-[12px]">
-            <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.skuName}</strong></div>
+            <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.armSkuName || selected.skuName}</strong></div>
             <div><span className="text-gray-500">New cost:</span> <strong>${selected.retailPrice.toFixed(4)}/hr · ${(selected.retailPrice*730).toFixed(2)}/mo</strong></div>
             <div><span className="text-gray-500">Current:</span> ${CURRENT_PRICE.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</div>
             {(() => {
