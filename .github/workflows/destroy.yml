@@ -22,6 +22,27 @@ jobs:
           fi
           echo "Confirmed. Proceeding with destroy."
 
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Start vm-snoozed if deallocated (so Terraform can power it off cleanly)
+        run: |
+          STATE=$(az vm get-instance-view \
+            --resource-group rg-dashboard-demo \
+            --name vm-snoozed \
+            --query "instanceView.statuses[1].code" \
+            --output tsv 2>/dev/null || echo "not_found")
+          echo "vm-snoozed power state: $STATE"
+          if [[ "$STATE" == *"deallocated"* ]]; then
+            echo "VM is deallocated — starting it so Terraform can destroy cleanly..."
+            az vm start --resource-group rg-dashboard-demo --name vm-snoozed
+            echo "VM started."
+          else
+            echo "VM is not deallocated — no action needed."
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -34,6 +55,7 @@ jobs:
           echo "client_secret = \"${{ secrets.AZURE_CLIENT_SECRET }}\"" >> terraform/terraform.tfvars
           echo "tenant_id = \"${{ secrets.AZURE_TENANT_ID }}\"" >> terraform/terraform.tfvars
           echo "admin_password = \"${{ secrets.VM_PASSWORD }}\"" >> terraform/terraform.tfvars
+          echo "create_vm_destroyed = false" >> terraform/terraform.tfvars
 
       - name: Terraform Init
         working-directory: terraform
