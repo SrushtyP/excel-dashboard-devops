@@ -1,4 +1,5 @@
-
+// inventory.js — ChemCore International / Nouryon IM Platform
+// Business metadata only. Live state + costs come from /api/vms
 
 export const INITIAL_DATACENTERS = [
   {
