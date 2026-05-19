@@ -1,5 +1,4 @@
-// inventory.js — ChemCore International / Nouryon IM Platform
-// Business metadata only. Live state + costs come from /api/vms
+
 
 export const INITIAL_DATACENTERS = [
   {
@@ -163,4 +162,36 @@ export const COST_SUMMARY = {
   savingsPct:            32,
   creditTotalInr:        16000,
   creditUsedInr:          3200,
+}
+
+// ── State metadata used by StatusDot and VM cards ──────────────────────────
+export const STATE_META = {
+  running: {
+    label:  'Online',
+    color:  '#1EA03C',
+    bg:     '#F0FBF2',
+    border: '#86EFAC',
+    dot:    '#1EA03C',
+  },
+  snoozed: {
+    label:  'Snoozed',
+    color:  '#D97706',
+    bg:     '#FFFBEB',
+    border: '#FCD34D',
+    dot:    '#D97706',
+  },
+  destroyed: {
+    label:  'Offline',
+    color:  '#9CA3AF',
+    bg:     '#F9FAFB',
+    border: '#E5E7EB',
+    dot:    '#9CA3AF',
+  },
+  offline: {
+    label:  'Offline',
+    color:  '#9CA3AF',
+    bg:     '#F9FAFB',
+    border: '#E5E7EB',
+    dot:    '#9CA3AF',
+  },
 }
