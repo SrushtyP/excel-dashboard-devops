@@ -455,6 +455,64 @@ def get_monitor_logs():
 
 
 
+# ── POST /api/admin/update-request ───────────────────────────────────────────
+# Lightweight status update — accept or close a request without git push.
+# Admin manually makes Git changes and closes the request here when done.
+@app.route('/api/admin/update-request', methods=['POST'])
+def admin_update_request():
+    try:
+        body         = request.get_json()
+        vm_id        = body.get('vm_id', '')
+        new_state    = body.get('new_state', '')
+        requested_at = body.get('requested_at', '')
+        new_status   = body.get('status', '')          # 'accepted' or 'actioned'
+        admin_note   = body.get('admin_note', '')
+
+        if new_status not in {'accepted', 'actioned'}:
+            return jsonify({'ok': False, 'error': f'Invalid status "{new_status}"'}), 400
+
+        try:
+            with open(PENDING_LOG) as f:
+                pending = json.load(f)
+        except Exception:
+            pending = []
+
+        updated = False
+        for r in pending:
+            if r['vm_id'] == vm_id and r.get('requested_at') == requested_at:
+                r['status'] = new_status
+                if admin_note:
+                    r['admin_note'] = admin_note
+                if new_status == 'actioned':
+                    r['actioned_at'] = datetime.utcnow().isoformat()
+                updated = True
+                break
+
+        if not updated:
+            # Fallback — match by vm_id + new_state if requested_at not found
+            for r in pending:
+                if r['vm_id'] == vm_id and r['new_state'] == new_state and r['status'] != 'actioned':
+                    r['status'] = new_status
+                    if admin_note:
+                        r['admin_note'] = admin_note
+                    if new_status == 'actioned':
+                        r['actioned_at'] = datetime.utcnow().isoformat()
+                    updated = True
+                    break
+
+        os.makedirs(os.path.dirname(PENDING_LOG), exist_ok=True)
+        with open(PENDING_LOG, 'w') as f:
+            json.dump(pending, f, indent=2)
+
+        return jsonify({
+            'ok':      True,
+            'status':  new_status,
+            'message': f'{vm_id} request {new_status}.',
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ── POST /api/admin/action-request ───────────────────────────────────────────
 # Admin reviews a pending request and triggers the pipeline.
 @app.route('/api/admin/action-request', methods=['POST'])
