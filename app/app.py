@@ -530,5 +530,26 @@ def admin_action_request():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── GET /api/pricing ──────────────────────────────────────────────────────────
+# Proxy for Azure Retail Prices API — avoids CORS when called from React frontend
+# Public API, no auth required. Passes through filter/top params.
+@app.route('/api/pricing')
+def get_pricing():
+    try:
+        filter_str = request.args.get('$filter', '')
+        top        = request.args.get('$top', '100')
+        url = (
+            f'https://prices.azure.com/api/retail/prices'
+            f'?api-version=2023-01-01-preview'
+            f'&$filter={filter_str}'
+            f'&$top={top}'
+        )
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({'error': str(e), 'Items': []}), 500
+
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80, debug=False)

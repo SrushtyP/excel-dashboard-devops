@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 
 const NAV = [
-  { id: 'dev',     label: 'Dev',      icon: '⚙️',  desc: 'DevOps & Infra'  },
-  { id: 'finops',  label: 'FinOps',   icon: '💰', desc: 'Cost & Billing'   },
-  { id: 'admin',   label: 'Admin',    icon: '👤', desc: 'Pending Requests' },
-  { id: 'mon',     label: 'Monitor',  icon: '📡', desc: 'Monitoring'       },
-  { id: 'sec',     label: 'Security', icon: '🔒', desc: 'Security'         },
+  { id: 'dev',     label: 'DevOps',      icon: '⚙️',  desc: 'DevOps & Infra'  },
+  { id: 'finops',  label: 'Fin',   icon: '💰', desc: 'Cost & Billing'   },
+  { id: 'admin',   label: 'Admin',    icon: '👤', desc: 'Administration' },
+  { id: 'mon',     label: 'Mon',  icon: '📡', desc: 'Monitoring'       },
+  { id: 'sec',     label: 'Sec', icon: '🔒', desc: 'Security'         },
   { id: 'gov',     label: 'Gov',      icon: '📋', desc: 'Governance'       },
 ]
 
@@ -18,11 +18,11 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
       <div className="px-5 pt-6 pb-5 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-            <span className="text-nouryon-blue font-bold text-lg leading-none">N</span>
+            <span className="text-nouryon-blue font-bold text-lg leading-none">Cc</span>
           </div>
           <div className="min-w-0">
-            <p className="text-white font-bold text-[15px] leading-tight">Nouryon</p>
-            <p className="text-blue-200 text-[11px] leading-tight truncate">IM Platform</p>
+            <p className="text-white font-bold text-[15px] leading-tight">ChemCore</p>
+            <p className="text-blue-200 text-[11px] leading-tight truncate">DT Platform</p>
           </div>
         </div>
         <div className="mt-3 text-[10px] text-blue-200/70 uppercase tracking-widest font-semibold">

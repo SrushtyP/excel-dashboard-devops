@@ -220,9 +220,11 @@ function ResizeCalculator() {
     try {
       const parts  = [...families].map(f => `contains(skuName, ' ${f}') eq true`).join(' or ')
       const filter = `armRegionName eq '${region}' and priceType eq 'Consumption' and (${parts})`
-      const url    = `https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&$filter=${encodeURIComponent(filter)}&$top=200`
-      const r      = await fetch(url)
-      const data   = await r.json()
+
+      // Call Flask proxy — avoids CORS from browser to prices.azure.com
+      const url  = `/api/pricing?$filter=${encodeURIComponent(filter)}&$top=200`
+      const r    = await fetch(url)
+      const data = await r.json()
       const seen   = new Set()
       const result = (data.Items || [])
         .filter(i =>
