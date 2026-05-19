@@ -164,3 +164,9 @@ export const COST_SUMMARY = {
   creditTotalInr:        16000,
   creditUsedInr:          3200,
 }
+export const STATE_META = {
+  running:   { label: 'Online',  color: '#1EA03C', bg: '#F0FBF2', border: '#86EFAC', dot: '#1EA03C' },
+  snoozed:   { label: 'Snoozed', color: '#D97706', bg: '#FFFBEB', border: '#FCD34D', dot: '#D97706' },
+  destroyed: { label: 'Offline', color: '#9CA3AF', bg: '#F9FAFB', border: '#E5E7EB', dot: '#9CA3AF' },
+  offline:   { label: 'Offline', color: '#9CA3AF', bg: '#F9FAFB', border: '#E5E7EB', dot: '#9CA3AF' },
+}
