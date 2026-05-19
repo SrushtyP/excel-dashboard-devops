@@ -174,6 +174,7 @@ resource "azurerm_linux_virtual_machine" "vm_snoozed" {
   admin_password                  = var.admin_password
   disable_password_authentication = false
   network_interface_ids           = [azurerm_network_interface.nic_snoozed.id]
+  skip_shutdown_and_force_delete  = true
 
   os_disk {
     caching              = "ReadWrite"

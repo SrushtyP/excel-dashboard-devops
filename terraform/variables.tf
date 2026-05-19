@@ -9,7 +9,7 @@ variable "resource_group_name" {
 }
 
 variable "location" {
-  default = "Central US"
+  default = "southafricanorth"
 }
 
 variable "admin_username" {
@@ -18,7 +18,7 @@ variable "admin_username" {
 
 # Change this if capacity issues occur — no need to touch main.tf
 variable "vm_size" {
-  default = "Standard_D2s_v3"
+  default = "Standard_B2ats_v2"
 }
 
 # Set to true to provision vm-destroyed, false to destroy it
