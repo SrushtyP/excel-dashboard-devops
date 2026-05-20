@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from security import get_all_assignments
 
 app = Flask(__name__, static_folder='../frontend-dist', static_url_path='')
 CORS(app)
@@ -27,7 +28,10 @@ def serve_static(path):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
-
+@app.route('/api/security/role-assignments')
+def security_role_assignments():
+    data = get_all_assignments(['vm-running', 'vm-snoozed'])
+    return jsonify(data)
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def _azure_credential():
     from azure.identity import ClientSecretCredential

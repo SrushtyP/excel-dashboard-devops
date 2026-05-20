@@ -6,6 +6,7 @@ import AdminView from './components/AdminView'
 import PlaceholderView from './components/PlaceholderView'
 import { INITIAL_DATACENTERS } from './data/inventory'
 import GovernanceView from './components/GovernanceView'
+import SecurityView from './components/SecurityView'
 
 export default function App() {
   const [activeNav, setActiveNav]     = useState('dev')
@@ -34,7 +35,8 @@ export default function App() {
         {activeNav === 'dev'    && <DevView datacenters={datacenters} setDatacenters={setDatacenters} />}
         {activeNav === 'finops' && <FinOpsView datacenters={datacenters} />}
         {activeNav === 'admin'  && <AdminView />}
-        {['mon','sec'].includes(activeNav) && <PlaceholderView section={activeNav} />}
+        {activeNav === 'mon' && <PlaceholderView section="mon" />}
+        {activeNav === 'sec' && <SecurityView datacenters={datacenters} />}
         {activeNav === 'gov' && <GovernanceView datacenters={datacenters} />}
       </main>
     </div>
