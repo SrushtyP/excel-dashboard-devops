@@ -397,7 +397,6 @@ export default function FinOpsView({ datacenters }) {
   const TABS = [
     {id:'overview',  label:'Overview'},
     {id:'vms',       label:'VM Analysis'},
-    {id:'monitor',   label:'Monitor Logs'},
   ]
 
   if (loading) return (

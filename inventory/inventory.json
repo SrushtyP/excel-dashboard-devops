@@ -23,7 +23,7 @@
       "desired_state": "running",
       "location": "southafricanorth",
       "region_display": "South Africa North",
-      "environment": "production",
+      "environment": "Production",
       "business_unit": "Global Compliance",
       "priority": "critical",
       "contact": "compliance-team@chemcore.com",

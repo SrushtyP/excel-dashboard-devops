@@ -166,7 +166,7 @@ function InfraView({ datacenters, setDatacenters }) {
           <KpiCard label="Running VMs"   value={running}   sub="Serving live traffic"  accent="#1EA03C" delay={0}    live={isLive}/>
           <KpiCard label="Snoozed VMs"   value={snoozed}   sub="Auto-wake scheduled"   accent="#D97706" delay={0.05} live={isLive}/>
           <KpiCard label="Destroyed VMs" value={destroyed} sub="Deprovisioned"         accent="#BE0032" delay={0.1}  live={isLive}/>
-          <KpiCard label="Monthly Cost"  value={`₹${totalCost.toLocaleString()}`} sub={isLive?"Live estimate":"Optimised estimate"} accent="#1A4780" delay={0.15} live={isLive}/>
+          <KpiCard label="Monthly Cost"  value={`$${totalCost.toLocaleString()}`} sub={isLive?"Live estimate":"Optimised estimate"} accent="#1A4780" delay={0.15} live={isLive}/>
         </div>
 
         <AnimatePresence mode="wait">
