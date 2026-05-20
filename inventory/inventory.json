@@ -23,7 +23,7 @@
       "desired_state": "running",
       "location": "southafricanorth",
       "region_display": "South Africa North",
-      "environment": "Production",
+      "environment": "Productin",
       "business_unit": "Global Compliance",
       "priority": "critical",
       "contact": "compliance-team@chemcore.com",
@@ -55,7 +55,7 @@
       "environment": "staging",
       "business_unit": "R&D Mumbai",
       "priority": "medium",
-      "contact": "rnd-mumbai@chemcore.com",
+      "contact": "",
       "business_need": "Active 8am-8pm IST weekdays only. Snoozed overnight and weekends. Saves 64% vs always-on.",
       "specs": {
         "cpu": 2,
