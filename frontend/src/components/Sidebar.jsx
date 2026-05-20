@@ -22,7 +22,7 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
           </div>
           <div className="min-w-0">
             <p className="text-white font-bold text-[15px] leading-tight">ChemCore</p>
-            <p className="text-blue-200 text-[11px] leading-tight truncate">DT Platform</p>
+            <p className="text-blue-200 text-[11px] leading-tight truncate">Digital Technology Platform</p>
           </div>
         </div>
         <div className="mt-3 text-[10px] text-blue-200/70 uppercase tracking-widest font-semibold">
