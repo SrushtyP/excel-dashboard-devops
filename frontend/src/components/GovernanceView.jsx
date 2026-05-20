@@ -5,7 +5,7 @@ const REQUIRED_TAGS = ['environment', 'contact', 'business_unit']
 const ALLOWED_ENV_VALUES = ['production', 'staging', 'dev', 'test', 'ephemeral']
 const TAG_MISSPELLINGS = [
   'enviroment', 'enviornment', 'environement',
-  'buisness_unit', 'bussiness_unit',
+  'busines_unit', 'bussiness_unit',
   'conatct', 'contcat',
 ]
 
@@ -20,7 +20,7 @@ function computeCompliance(vms) {
     const tags = {
       environment:   vm.environment   || '',
       contact:       vm.contact       || '',
-      business_unit: vm.business_unit || '',
+      business_unit: vm._unit || '',
     }
 
     const hasAll = REQUIRED_TAGS.every(k => tags[k] && tags[k].trim() !== '')
@@ -101,8 +101,10 @@ function SectionCard({ title, children, badge }) {
 }
 
 export default function GovernanceView({ datacenters }) {
-  const vms = datacenters.flatMap(dc => dc.vms || [])
-  const stats = computeCompliance(vms)
+    const vms = datacenters.flatMap(dc =>
+    (dc.racks || []).flatMap(rack => rack.vms || [])
+    )
+    const stats = computeCompliance(vms)
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page">
