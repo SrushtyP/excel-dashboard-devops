@@ -1,49 +1,52 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-const REQUIRED_TAGS=['environment','production','business_unit']
-const ALLOWED_ENV_VALUES=['environment', 'staging', 'dev', 'test', 'ephemeral']
+
+const REQUIRED_TAGS = ['environment', 'contact', 'business_unit']
+const ALLOWED_ENV_VALUES = ['production', 'staging', 'dev', 'test', 'ephemeral']
 const TAG_MISSPELLINGS = [
   'enviroment', 'enviornment', 'environement',
   'buisness_unit', 'bussiness_unit',
   'conatct', 'contcat',
 ]
 
-function computeCompliance(vms){
-    let complaint = 0
-    const perType={}
-    const invalidEnv=[]
-    const caseIssues=[]
-    const missing=[]
+function computeCompliance(vms) {
+  let compliant = 0
+  const perType = {}
+  const invalidEnv = []
+  const caseIssues = []
+  const missing = []
 
-    vms.foreach(vm=>{
-        const tags = {
-            environment: vm.environment || '',
-            contact: vm.contact || '',
-            business_unit: cm.business_unit || '',
-        }
-        const hasAll = REQUIRED_TAGS.every(k => tags[k] && tags[k].trim() !== '')
-        if (hasAll) complaint++
+  vms.forEach(vm => {
+    const tags = {
+      environment:   vm.environment   || '',
+      contact:       vm.contact       || '',
+      business_unit: vm.business_unit || '',
+    }
 
-        const type = vm.specs?.vm_size || 'Unknown'
-        if (!perType[type]) perType[type] = { total: 0, compliant: 0 }
-        perType[type].total++
-        if (hasAll) perType[type].compliant++
+    const hasAll = REQUIRED_TAGS.every(k => tags[k] && tags[k].trim() !== '')
+    if (hasAll) compliant++
 
-        const envVal = tags.environment.toLowerCase()
-        if (envVal && !ALLOWED_ENV_VALUES.includes(envVal)) {
-            invalidEnv.push({ name: vm.name, value: tags.environment })
-        }
+    const type = vm.specs?.vm_size || 'Unknown'
+    if (!perType[type]) perType[type] = { total: 0, compliant: 0 }
+    perType[type].total++
+    if (hasAll) perType[type].compliant++
 
-        if (tags.environment && tags.environment !== tags.environment.toLowerCase()) {
-            caseIssues.push({ name: vm.name, value: tags.environment })
-        }
+    const envVal = tags.environment.toLowerCase()
+    if (envVal && !ALLOWED_ENV_VALUES.includes(envVal)) {
+      invalidEnv.push({ name: vm.name, value: tags.environment })
+    }
 
-        const missing_tags = REQUIRED_TAGS.filter(k => !tags[k] || tags[k].trim() === '')
-        if (missing_tags.length > 0) {
-            missing.push({ name: vm.name, alias: vm.alias, missing: missing_tags })
-        }
-    })
-const perTypeArr = Object.entries(perType).map(([type, v]) => ({
+    if (tags.environment && tags.environment !== tags.environment.toLowerCase()) {
+      caseIssues.push({ name: vm.name, value: tags.environment })
+    }
+
+    const missing_tags = REQUIRED_TAGS.filter(k => !tags[k] || tags[k].trim() === '')
+    if (missing_tags.length > 0) {
+      missing.push({ name: vm.name, alias: vm.alias, missing: missing_tags })
+    }
+  })
+
+  const perTypeArr = Object.entries(perType).map(([type, v]) => ({
     type,
     total: v.total,
     compliant: v.compliant,
@@ -103,7 +106,6 @@ export default function GovernanceView({ datacenters }) {
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <h1 className="text-[20px] font-bold text-gray-900">Governance</h1>
         <p className="text-[12px] text-gray-500 mt-0.5">
