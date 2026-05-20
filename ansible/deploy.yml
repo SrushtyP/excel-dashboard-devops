@@ -45,6 +45,12 @@
         dest: "{{ app_dir }}/app.py"
         owner: "{{ app_user }}"
 
+    - name: Copy security.py
+      copy:
+        src: ../app/security.py
+        dest: "{{ app_dir }}/security.py"
+        owner: "{{ app_user }}"
+        
     - name: Copy templates folder
       copy:
         src: ../app/templates/
@@ -88,7 +94,11 @@
       args:
         executable: /bin/bash
 
-    # ✅ FIX: Create a tar archive of frontend source EXCLUDING node_modules and dist
+    - name: Install azure-mgmt-authorization
+      pip:
+        name: azure-mgmt-authorization
+        executable: pip3
+    #✅ FIX: Create a tar archive of frontend source EXCLUDING node_modules and dist
     - name: Create frontend source archive (excluding node_modules and dist)
       delegate_to: localhost
       become: no
