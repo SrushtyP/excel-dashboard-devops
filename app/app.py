@@ -32,6 +32,52 @@ def serve_static(path):
 def security_role_assignments():
     data = get_all_assignments(['vm-running', 'vm-snoozed'])
     return jsonify(data)
+
+# ── GET /api/security/public-ips ─────────────────────────────────────────────
+# Returns NSG inbound-allow rules + public IP exposure per VM.
+# Shape: { "vm-running": [ {ip, port, protocol, exposure, risk, justification} ], ... }
+@app.route('/api/security/public-ips')
+def security_public_ips():
+    try:
+        from security_ciso import get_public_ip_exposure
+        cred, sub_id = _azure_credential()
+        vm_names = [v['id'] for v in _load_inv().get('vms', [])
+                    if v.get('desired_state') != 'destroyed']
+        data = get_public_ip_exposure(vm_names, cred, sub_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── GET /api/security/certificates ───────────────────────────────────────────
+# Returns TLS certificate status per VM (Key Vault or live TLS probe).
+# Shape: { "vm-running": [ {domain, issuer, expiry, days_left, status} ], ... }
+@app.route('/api/security/certificates')
+def security_certificates():
+    try:
+        from security_ciso import get_certificate_status
+        cred, sub_id = _azure_credential()
+        vm_names = [v['id'] for v in _load_inv().get('vms', [])
+                    if v.get('desired_state') != 'destroyed']
+        data = get_certificate_status(vm_names, cred, sub_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── GET /api/security/vulnerabilities ────────────────────────────────────────
+# Returns Defender for Cloud vulnerability assessments per VM.
+# Shape: { "vm-running": [ {id, component, severity, cvss, description, status, detected} ], ... }
+@app.route('/api/security/vulnerabilities')
+def security_vulnerabilities():
+    try:
+        from security_ciso import get_vulnerabilities
+        cred, sub_id = _azure_credential()
+        vm_names = [v['id'] for v in _load_inv().get('vms', [])]
+        data = get_vulnerabilities(vm_names, cred, sub_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def _azure_credential():
     from azure.identity import ClientSecretCredential
