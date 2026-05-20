@@ -50,6 +50,12 @@
         src: ../app/security.py
         dest: "{{ app_dir }}/security.py"
         owner: "{{ app_user }}"
+
+    - name: Copy security_ciso.py
+      copy:
+        src: ../app/security_ciso.py
+        dest: "{{ app_dir }}/security_ciso.py"
+        owner: "{{ app_user }}"
         
     - name: Copy templates folder
       copy:
@@ -152,10 +158,8 @@
     - name: Build React frontend
       shell: |
         export PATH=$PATH:/usr/bin:/usr/local/bin
-        cd {{ app_dir }}/frontend
-        ./node_modules/.bin/vite build
-      become: yes
-      become_user: "{{ app_user }}"
+        cd /opt/dashboard-app/frontend
+        NODE_OPTIONS="--max-old-space-size=1024" ./node_modules/.bin/vite build
       args:
         executable: /bin/bash
 
