@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const KNOWN_ROLES = {
   '8e3af657-a8ff-443c-a75c-2fe8c4bcb635': 'Owner',
@@ -8,22 +10,135 @@ const KNOWN_ROLES = {
 }
 
 const ROLE_COLORS = {
-  'Owner':       { bg: 'bg-red-100',    text: 'text-red-700'    },
-  'Contributor': { bg: 'bg-amber-100',  text: 'text-amber-700'  },
-  'Reader':      { bg: 'bg-green-100',  text: 'text-green-700'  },
-  'Unknown':     { bg: 'bg-gray-100',   text: 'text-gray-600'   },
+  Owner:       { bg: 'bg-red-100',    text: 'text-red-700'    },
+  Contributor: { bg: 'bg-amber-100',  text: 'text-amber-700'  },
+  Reader:      { bg: 'bg-green-100',  text: 'text-green-700'  },
+  Unknown:     { bg: 'bg-gray-100',   text: 'text-gray-600'   },
 }
+
+const SEVERITY_COLORS = {
+  Critical: { bg: 'bg-red-100',    text: 'text-red-700',    dot: 'bg-red-500'    },
+  High:     { bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
+  Medium:   { bg: 'bg-amber-100',  text: 'text-amber-700',  dot: 'bg-amber-400'  },
+  Low:      { bg: 'bg-green-100',  text: 'text-green-700',  dot: 'bg-green-500'  },
+  Info:     { bg: 'bg-blue-100',   text: 'text-blue-700',   dot: 'bg-blue-400'   },
+}
+
+// ─── Mock data for CISO & Vulnerabilities ─────────────────────────────────
+
+const MOCK_PUBLIC_IPS = [
+  { vm: 'vm-running',   ip: '132.196.69.247', port: 5000, protocol: 'TCP', exposure: 'Public',  risk: 'High',   justification: 'Client demo portal — intentional'   },
+  { vm: 'vm-running',   ip: '132.196.69.247', port: 22,   protocol: 'TCP', exposure: 'Public',  risk: 'Critical', justification: 'SSH open to 0.0.0.0/0 — needs NSG restriction' },
+  { vm: 'vm-snoozed',   ip: '10.0.0.12',      port: 22,   protocol: 'TCP', exposure: 'Private', risk: 'Low',    justification: 'SSH restricted to VNet only'          },
+  { vm: 'vm-destroyed', ip: 'N/A',            port: null,  protocol: '—',   exposure: 'None',   risk: 'Info',   justification: 'VM deprovisioned — no exposure'        },
+]
+
+const MOCK_CERTIFICATES = [
+  {
+    vm: 'vm-running',
+    domain: 'compliance.chemcore.com',
+    issuer: "Let's Encrypt",
+    expiry: '2025-09-12',
+    daysLeft: -251,
+    status: 'Expired',
+  },
+  {
+    vm: 'vm-running',
+    domain: 'dashboard.chemcore.com',
+    issuer: 'DigiCert',
+    expiry: '2026-08-01',
+    daysLeft: 73,
+    status: 'Expiring Soon',
+  },
+  {
+    vm: 'vm-snoozed',
+    domain: 'rnd-internal.chemcore.com',
+    issuer: "Let's Encrypt",
+    expiry: '2026-11-15',
+    daysLeft: 179,
+    status: 'Valid',
+  },
+]
+
+const MOCK_VULNS = [
+  {
+    id: 'CVE-2024-3094',
+    vm: 'vm-running',
+    component: 'xz-utils 5.6.0',
+    severity: 'Critical',
+    cvss: 10.0,
+    description: 'XZ Utils backdoor — malicious code in liblzma. Immediate patching required.',
+    status: 'Open',
+    detected: '2026-04-01',
+  },
+  {
+    id: 'CVE-2023-44487',
+    vm: 'vm-running',
+    component: 'nginx 1.18.0',
+    severity: 'High',
+    cvss: 7.5,
+    description: 'HTTP/2 Rapid Reset Attack — DoS vulnerability.',
+    status: 'In Progress',
+    detected: '2026-03-15',
+  },
+  {
+    id: 'CVE-2024-21626',
+    vm: 'vm-snoozed',
+    component: 'runc 1.1.11',
+    severity: 'High',
+    cvss: 8.6,
+    description: 'Container breakout via file descriptor leak.',
+    status: 'Open',
+    detected: '2026-04-10',
+  },
+  {
+    id: 'CVE-2023-38545',
+    vm: 'vm-snoozed',
+    component: 'curl 7.88.1',
+    severity: 'High',
+    cvss: 7.5,
+    description: 'SOCKS5 heap overflow — remote code execution possible.',
+    status: 'Resolved',
+    detected: '2026-02-20',
+  },
+  {
+    id: 'CVE-2024-0727',
+    vm: 'vm-running',
+    component: 'OpenSSL 3.0.2',
+    severity: 'Medium',
+    cvss: 5.5,
+    description: 'NULL pointer dereference in PKCS12 parsing.',
+    status: 'Open',
+    detected: '2026-04-18',
+  },
+  {
+    id: 'CVE-2023-52425',
+    vm: 'vm-snoozed',
+    component: 'libexpat 2.4.9',
+    severity: 'Medium',
+    cvss: 5.9,
+    description: 'XML entity expansion DoS.',
+    status: 'Open',
+    detected: '2026-03-30',
+  },
+]
+
+// ─── Shared UI ────────────────────────────────────────────────────────────────
 
 function SectionCard({ title, children, badge }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    >
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50/60">
         <h3 className="text-[13px] font-bold text-gray-800">{title}</h3>
         {badge !== undefined && (
-          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full
-            ${badge === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {badge === 0 ? '✓ All clear' : `${badge} finding${badge > 1 ? 's' : ''}`}
+          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+            badge === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
+            {badge === 0 ? '✓ All clear' : `${badge} finding${badge !== 1 ? 's' : ''}`}
           </span>
         )}
       </div>
@@ -33,7 +148,7 @@ function SectionCard({ title, children, badge }) {
 }
 
 function RoleBadge({ roleName }) {
-  const c = ROLE_COLORS[roleName] || ROLE_COLORS['Unknown']
+  const c = ROLE_COLORS[roleName] || ROLE_COLORS.Unknown
   return (
     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${c.bg} ${c.text}`}>
       {roleName}
@@ -41,10 +156,51 @@ function RoleBadge({ roleName }) {
   )
 }
 
-export default function SecurityView() {
-  const [data, setData]       = useState(null)
+function SeverityBadge({ severity }) {
+  const c = SEVERITY_COLORS[severity] || SEVERITY_COLORS.Info
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full ${c.bg} ${c.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+      {severity}
+    </span>
+  )
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    Open:        'bg-red-50 text-red-600 border border-red-200',
+    'In Progress':'bg-amber-50 text-amber-600 border border-amber-200',
+    Resolved:    'bg-green-50 text-green-700 border border-green-200',
+    Expired:     'bg-red-100 text-red-700',
+    'Expiring Soon': 'bg-amber-100 text-amber-700',
+    Valid:       'bg-green-100 text-green-700',
+    Public:      'bg-red-100 text-red-700',
+    Private:     'bg-green-100 text-green-700',
+    None:        'bg-gray-100 text-gray-500',
+  }
+  return (
+    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-500'}`}>
+      {status}
+    </span>
+  )
+}
+
+function StatCard({ label, value, color = 'text-gray-800', sub }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">{label}</p>
+      <p className={`text-[28px] font-black mt-0.5 leading-none ${color}`}>{value}</p>
+      {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+// ─── Tab: RBAC ────────────────────────────────────────────────────────────────
+
+function RBACTab() {
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     fetch('/api/security/role-assignments')
@@ -53,173 +209,457 @@ export default function SecurityView() {
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64 text-[13px] text-gray-400">
-      Loading role assignments from Azure...
-    </div>
-  )
-
+  if (loading) return <div className="flex items-center justify-center h-48 text-[13px] text-gray-400">Loading role assignments from Azure…</div>
   if (error) return (
     <div className="p-6">
-      <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-[12px] text-red-700">
-        Failed to load: {error}
-      </div>
+      <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-[12px] text-red-700">Failed to load: {error}</div>
     </div>
   )
 
-  // Flatten all assignments across VMs
-  const allAssignments = Object.entries(data).flatMap(([vmName, assignments]) => {
-    if (assignments.error) return []
-    return assignments.map(a => ({ ...a, vmName }))
-  })
-
+  const allAssignments = Object.entries(data).flatMap(([vmName, assignments]) =>
+    assignments.error ? [] : assignments.map(a => ({ ...a, vmName }))
+  )
   const owners       = allAssignments.filter(a => a.is_owner)
   const unknownRoles = allAssignments.filter(a => a.role_name === 'Unknown')
   const vmNames      = Object.keys(data)
-
-  // VMs with more than one owner
-  const ownersByVm = vmNames.map(vm => ({
-    vm,
-    owners: (data[vm].error ? [] : data[vm]).filter(a => a.is_owner)
-  }))
+  const ownersByVm   = vmNames.map(vm => ({ vm, owners: (data[vm].error ? [] : data[vm]).filter(a => a.is_owner) }))
   const overprivileged = ownersByVm.filter(v => v.owners.length > 1)
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface-page">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <h1 className="text-[20px] font-bold text-gray-900">Security</h1>
-        <p className="text-[12px] text-gray-500 mt-0.5">
-          RBAC role assignments audit · ChemCore International · {vmNames.length} VMs · {allAssignments.length} total assignments
-        </p>
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Total Assignments" value={allAssignments.length} />
+        <StatCard label="Owner Assignments" value={owners.length} color={owners.length > 0 ? 'text-red-600' : 'text-green-600'} />
+        <StatCard label="Unknown Roles"     value={unknownRoles.length} color={unknownRoles.length > 0 ? 'text-amber-600' : 'text-green-600'} />
       </div>
 
-      <div className="flex-1 p-6 space-y-5 max-w-5xl">
+      <SectionCard title="Role Assignments per VM">
+        <table className="w-full text-[12px]">
+          <thead><tr className="bg-gray-50">
+            {['VM','Principal ID','Type','Role'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
+          </tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            {allAssignments.map((a, i) => (
+              <tr key={i} className="hover:bg-gray-50/60">
+                <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
+                <td className="px-5 py-2.5 font-mono text-gray-400 text-[11px]">{a.principal_id.slice(0, 8)}…</td>
+                <td className="px-5 py-2.5 text-gray-600">{a.principal_type}</td>
+                <td className="px-5 py-2.5"><RoleBadge roleName={a.role_name} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SectionCard>
 
-        {/* ── Summary cards ── */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Total Assignments', value: allAssignments.length, color: 'text-gray-800' },
-            { label: 'Owner Assignments', value: owners.length,         color: owners.length > 0 ? 'text-red-600' : 'text-green-600' },
-            { label: 'Unknown Roles',     value: unknownRoles.length,   color: unknownRoles.length > 0 ? 'text-amber-600' : 'text-green-600' },
-          ].map(card => (
-            <div key={card.label} className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-              <p className="text-[11px] text-gray-500 uppercase tracking-wider font-bold">{card.label}</p>
-              <p className={`text-[28px] font-bold mt-1 ${card.color}`}>{card.value}</p>
+      <SectionCard title="Owner Role Audit" badge={owners.length}>
+        {owners.length === 0 ? (
+          <p className="px-5 py-4 text-[12px] text-gray-400">No Owner assignments found.</p>
+        ) : (
+          <>
+            <div className="px-5 py-3 bg-red-50 border-b border-red-100">
+              <p className="text-[11px] text-red-700">Owner grants full access including role assignment. Each entry below should be reviewed with your security team.</p>
             </div>
-          ))}
-        </div>
-
-        {/* ── All role assignments ── */}
-        <SectionCard title="Role Assignments per VM">
-          <table className="w-full text-[12px]">
-            <thead><tr className="bg-gray-50">
-              <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">VM</th>
-              <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Principal ID</th>
-              <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Type</th>
-              <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Role</th>
-            </tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {allAssignments.map((a, i) => (
-                <tr key={i}>
-                  <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
-                  <td className="px-5 py-2.5 font-mono text-gray-400 text-[11px]">{a.principal_id.slice(0, 8)}…</td>
-                  <td className="px-5 py-2.5 text-gray-600">{a.principal_type}</td>
-                  <td className="px-5 py-2.5"><RoleBadge roleName={a.role_name} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </SectionCard>
-
-        {/* ── Owner audit ── */}
-        <SectionCard title="Owner Role Audit" badge={owners.length}>
-          {owners.length === 0 ? (
-            <p className="px-5 py-4 text-[12px] text-gray-400">No Owner assignments found.</p>
-          ) : (
-            <>
-              <div className="px-5 py-3 bg-red-50 border-b border-red-100">
-                <p className="text-[11px] text-red-700">
-                  Owner grants full access including role assignment. Each entry below should be reviewed with your security team.
-                </p>
-              </div>
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-gray-50">
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">VM</th>
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Principal ID</th>
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Type</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-50">
-                  {owners.map((a, i) => (
-                    <tr key={i} className="bg-red-50/40">
-                      <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
-                      <td className="px-5 py-2.5 font-mono text-gray-500 text-[11px]">{a.principal_id}</td>
-                      <td className="px-5 py-2.5 text-gray-600">{a.principal_type}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </SectionCard>
-
-        {/* ── Overprivileged ── */}
-        <SectionCard title="Overprivileged VMs (Multiple Owners)" badge={overprivileged.length}>
-          {overprivileged.length === 0 ? (
-            <p className="px-5 py-4 text-[12px] text-gray-400">No VMs have more than one Owner assignment.</p>
-          ) : (
             <table className="w-full text-[12px]">
               <thead><tr className="bg-gray-50">
-                <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">VM</th>
-                <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Owner Count</th>
+                {['VM','Principal ID','Type'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {overprivileged.map(v => (
-                  <tr key={v.vm}>
-                    <td className="px-5 py-2.5 font-mono text-gray-700">{v.vm}</td>
-                    <td className="px-5 py-2.5">
-                      <span className="bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full text-[11px]">
-                        {v.owners.length} owners
-                      </span>
-                    </td>
+                {owners.map((a, i) => (
+                  <tr key={i} className="bg-red-50/40">
+                    <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
+                    <td className="px-5 py-2.5 font-mono text-gray-500 text-[11px]">{a.principal_id}</td>
+                    <td className="px-5 py-2.5 text-gray-600">{a.principal_type}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </SectionCard>
+          </>
+        )}
+      </SectionCard>
 
-        {/* ── Unknown roles ── */}
-        <SectionCard title="Unknown Role IDs" badge={unknownRoles.length}>
-          {unknownRoles.length === 0 ? (
-            <p className="px-5 py-4 text-[12px] text-gray-400">All role IDs are recognised.</p>
-          ) : (
-            <>
-              <div className="px-5 py-3 bg-amber-50 border-b border-amber-100">
-                <p className="text-[11px] text-amber-700">
-                  These role IDs are not in the known roles list. They may be custom roles — worth investigating.
+      <SectionCard title="Overprivileged VMs (Multiple Owners)" badge={overprivileged.length}>
+        {overprivileged.length === 0 ? (
+          <p className="px-5 py-4 text-[12px] text-gray-400">No VMs have more than one Owner assignment.</p>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead><tr className="bg-gray-50">
+              {['VM','Owner Count'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
+            </tr></thead>
+            <tbody className="divide-y divide-gray-50">
+              {overprivileged.map(v => (
+                <tr key={v.vm}>
+                  <td className="px-5 py-2.5 font-mono text-gray-700">{v.vm}</td>
+                  <td className="px-5 py-2.5"><span className="bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full text-[11px]">{v.owners.length} owners</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Unknown Role IDs" badge={unknownRoles.length}>
+        {unknownRoles.length === 0 ? (
+          <p className="px-5 py-4 text-[12px] text-gray-400">All role IDs are recognised.</p>
+        ) : (
+          <>
+            <div className="px-5 py-3 bg-amber-50 border-b border-amber-100">
+              <p className="text-[11px] text-amber-700">These role IDs are not in the known roles list — may be custom roles worth investigating.</p>
+            </div>
+            <table className="w-full text-[12px]">
+              <thead><tr className="bg-gray-50">
+                {['VM','Principal ID','Role ID'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-50">
+                {unknownRoles.map((a, i) => (
+                  <tr key={i}>
+                    <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
+                    <td className="px-5 py-2.5 font-mono text-gray-400 text-[11px]">{a.principal_id.slice(0, 8)}…</td>
+                    <td className="px-5 py-2.5 font-mono text-amber-700 text-[11px]">{a.role_id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </SectionCard>
+    </div>
+  )
+}
+
+// ─── CISO sub-tab: Public IP Exposure ─────────────────────────────────────────
+
+function PublicIPTab() {
+  const publicExposed = MOCK_PUBLIC_IPS.filter(r => r.exposure === 'Public')
+  const criticalCount = MOCK_PUBLIC_IPS.filter(r => r.risk === 'Critical').length
+  const highCount     = MOCK_PUBLIC_IPS.filter(r => r.risk === 'High').length
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Total Ports Scanned" value={MOCK_PUBLIC_IPS.filter(r => r.port).length} />
+        <StatCard label="Public Exposed"      value={publicExposed.length} color={publicExposed.length > 0 ? 'text-red-600' : 'text-green-600'} />
+        <StatCard label="Critical Risk Ports" value={criticalCount} color={criticalCount > 0 ? 'text-red-700' : 'text-green-600'} sub={`${highCount} High`} />
+      </div>
+
+      <SectionCard title="Network Exposure Map" badge={publicExposed.length}>
+        {publicExposed.length > 0 && (
+          <div className="px-5 py-3 bg-red-50 border-b border-red-100">
+            <p className="text-[11px] text-red-700">Ports exposed to the public internet. Review NSG rules and apply least-privilege access.</p>
+          </div>
+        )}
+        <table className="w-full text-[12px]">
+          <thead><tr className="bg-gray-50">
+            {['VM','Public IP','Port','Protocol','Exposure','Risk Level','Notes'].map(h =>
+              <th key={h} className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+            )}
+          </tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            {MOCK_PUBLIC_IPS.map((row, i) => (
+              <tr key={i} className={`hover:bg-gray-50/60 ${row.risk === 'Critical' ? 'bg-red-50/30' : ''}`}>
+                <td className="px-4 py-2.5 font-mono text-gray-700 text-[11px]">{row.vm}</td>
+                <td className="px-4 py-2.5 font-mono text-gray-600 text-[11px]">{row.ip}</td>
+                <td className="px-4 py-2.5 font-mono text-gray-800 font-bold text-[11px]">{row.port ?? '—'}</td>
+                <td className="px-4 py-2.5 text-gray-500 text-[11px]">{row.protocol}</td>
+                <td className="px-4 py-2.5"><StatusBadge status={row.exposure} /></td>
+                <td className="px-4 py-2.5"><SeverityBadge severity={row.risk} /></td>
+                <td className="px-4 py-2.5 text-gray-500 text-[11px] max-w-xs">{row.justification}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <SectionCard title="Recommended Remediations">
+        <div className="divide-y divide-gray-50">
+          {[
+            { vm: 'vm-running', port: 22, action: 'Restrict SSH (port 22) to specific IP ranges via NSG inbound rule. Avoid 0.0.0.0/0.', urgency: 'Critical' },
+            { vm: 'vm-running', port: 5000, action: 'Consider placing the Flask app behind an Azure Application Gateway or Azure Front Door with WAF.', urgency: 'Medium' },
+          ].map((rec, i) => (
+            <div key={i} className={`px-5 py-3 flex gap-4 items-start ${rec.urgency === 'Critical' ? 'bg-red-50/30' : ''}`}>
+              <SeverityBadge severity={rec.urgency} />
+              <div>
+                <p className="text-[12px] font-semibold text-gray-800 font-mono">{rec.vm} · Port {rec.port}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{rec.action}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+
+// ─── CISO sub-tab: Certificate Monitoring ────────────────────────────────────
+
+function CertificatesTab() {
+  const expired      = MOCK_CERTIFICATES.filter(c => c.status === 'Expired')
+  const expiringSoon = MOCK_CERTIFICATES.filter(c => c.status === 'Expiring Soon')
+  const valid        = MOCK_CERTIFICATES.filter(c => c.status === 'Valid')
+
+  const certStatusColor = (status) => {
+    if (status === 'Expired')       return 'text-red-600'
+    if (status === 'Expiring Soon') return 'text-amber-600'
+    return 'text-green-600'
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="Expired Certs"      value={expired.length}      color={expired.length > 0      ? 'text-red-600'   : 'text-green-600'} />
+        <StatCard label="Expiring ≤ 90 days" value={expiringSoon.length} color={expiringSoon.length > 0 ? 'text-amber-600' : 'text-green-600'} />
+        <StatCard label="Valid"              value={valid.length}        color="text-green-600" />
+      </div>
+
+      {expired.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3">
+          <p className="text-[12px] font-bold text-red-700">⚠ {expired.length} expired certificate{expired.length > 1 ? 's' : ''} detected — clients may be receiving security errors.</p>
+        </div>
+      )}
+
+      <SectionCard title="TLS Certificate Inventory" badge={expired.length + expiringSoon.length}>
+        <table className="w-full text-[12px]">
+          <thead><tr className="bg-gray-50">
+            {['VM','Domain','Issuer','Expiry Date','Days Remaining','Status'].map(h =>
+              <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+            )}
+          </tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            {MOCK_CERTIFICATES.map((cert, i) => (
+              <tr key={i} className={`hover:bg-gray-50/60 ${cert.status === 'Expired' ? 'bg-red-50/30' : cert.status === 'Expiring Soon' ? 'bg-amber-50/20' : ''}`}>
+                <td className="px-5 py-2.5 font-mono text-gray-700 text-[11px]">{cert.vm}</td>
+                <td className="px-5 py-2.5 font-mono text-gray-800 text-[11px]">{cert.domain}</td>
+                <td className="px-5 py-2.5 text-gray-500 text-[11px]">{cert.issuer}</td>
+                <td className="px-5 py-2.5 font-mono text-gray-600 text-[11px]">{cert.expiry}</td>
+                <td className="px-5 py-2.5">
+                  <span className={`font-bold text-[12px] font-mono ${certStatusColor(cert.status)}`}>
+                    {cert.daysLeft < 0 ? `${Math.abs(cert.daysLeft)}d ago` : `${cert.daysLeft}d`}
+                  </span>
+                </td>
+                <td className="px-5 py-2.5"><StatusBadge status={cert.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <SectionCard title="Renewal Actions Required">
+        <div className="divide-y divide-gray-50">
+          {MOCK_CERTIFICATES.filter(c => c.status !== 'Valid').map((cert, i) => (
+            <div key={i} className="px-5 py-3 flex gap-4 items-start">
+              <StatusBadge status={cert.status} />
+              <div>
+                <p className="text-[12px] font-semibold text-gray-800">{cert.domain} <span className="text-gray-400 font-normal font-mono">({cert.vm})</span></p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {cert.status === 'Expired'
+                    ? `Certificate expired ${Math.abs(cert.daysLeft)} days ago. Renew immediately to restore secure connections.`
+                    : `Certificate expires in ${cert.daysLeft} days. Schedule renewal before ${cert.expiry}.`}
                 </p>
               </div>
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-gray-50">
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">VM</th>
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Principal ID</th>
-                  <th className="px-5 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Role ID</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-50">
-                  {unknownRoles.map((a, i) => (
-                    <tr key={i}>
-                      <td className="px-5 py-2.5 font-mono text-gray-700">{a.vmName}</td>
-                      <td className="px-5 py-2.5 font-mono text-gray-400 text-[11px]">{a.principal_id.slice(0,8)}…</td>
-                      <td className="px-5 py-2.5 font-mono text-amber-700 text-[11px]">{a.role_id}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </SectionCard>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
 
+// ─── Tab: CISO (with sub-tabs) ────────────────────────────────────────────────
+
+const CISO_SUBTABS = [
+  { id: 'ip',   label: 'Public IP Exposure' },
+  { id: 'cert', label: 'Certificate Monitoring' },
+]
+
+function CISOTab() {
+  const [sub, setSub] = useState('ip')
+
+  return (
+    <div className="space-y-5">
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {CISO_SUBTABS.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setSub(s.id)}
+            className={`px-4 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
+              sub === s.id
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={sub}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18 }}
+        >
+          {sub === 'ip'   && <PublicIPTab />}
+          {sub === 'cert' && <CertificatesTab />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ─── Tab: Vulnerabilities ─────────────────────────────────────────────────────
+
+function VulnerabilitiesTab() {
+  const [filter, setFilter] = useState('All')
+  const severities = ['All', 'Critical', 'High', 'Medium', 'Low']
+
+  const filtered = filter === 'All' ? MOCK_VULNS : MOCK_VULNS.filter(v => v.severity === filter)
+  const open     = MOCK_VULNS.filter(v => v.status === 'Open')
+  const critical = MOCK_VULNS.filter(v => v.severity === 'Critical')
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Total CVEs"    value={MOCK_VULNS.length} />
+        <StatCard label="Open"          value={open.length}     color={open.length > 0     ? 'text-red-600'   : 'text-green-600'} />
+        <StatCard label="Critical"      value={critical.length} color={critical.length > 0 ? 'text-red-700'   : 'text-green-600'} />
+        <StatCard label="Resolved"      value={MOCK_VULNS.filter(v => v.status === 'Resolved').length} color="text-green-600" />
+      </div>
+
+      <SectionCard title="CVE Findings" badge={open.length}>
+        {/* Severity filter pills */}
+        <div className="flex gap-2 px-5 py-3 border-b border-gray-100">
+          {severities.map(s => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`text-[11px] font-bold px-3 py-1 rounded-full transition-all border ${
+                filter === s
+                  ? 'bg-gray-800 text-white border-gray-800'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <table className="w-full text-[12px]">
+          <thead><tr className="bg-gray-50">
+            {['CVE ID','VM','Component','Severity','CVSS','Status','Detected','Description'].map(h =>
+              <th key={h} className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
+            )}
+          </tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            <AnimatePresence>
+              {filtered.map((v, i) => (
+                <motion.tr
+                  key={v.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className={`hover:bg-gray-50/60 ${v.severity === 'Critical' ? 'bg-red-50/30' : ''}`}
+                >
+                  <td className="px-4 py-2.5 font-mono text-blue-600 text-[11px] font-bold">{v.id}</td>
+                  <td className="px-4 py-2.5 font-mono text-gray-600 text-[11px]">{v.vm}</td>
+                  <td className="px-4 py-2.5 font-mono text-gray-700 text-[11px]">{v.component}</td>
+                  <td className="px-4 py-2.5"><SeverityBadge severity={v.severity} /></td>
+                  <td className="px-4 py-2.5">
+                    <span className={`font-mono font-bold text-[12px] ${v.cvss >= 9 ? 'text-red-700' : v.cvss >= 7 ? 'text-orange-600' : 'text-amber-600'}`}>
+                      {v.cvss.toFixed(1)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5"><StatusBadge status={v.status} /></td>
+                  <td className="px-4 py-2.5 font-mono text-gray-400 text-[11px]">{v.detected}</td>
+                  <td className="px-4 py-2.5 text-gray-500 text-[11px] max-w-xs">{v.description}</td>
+                </motion.tr>
+              ))}
+            </AnimatePresence>
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <SectionCard title="Patch Priority Queue">
+        <div className="divide-y divide-gray-50">
+          {MOCK_VULNS.filter(v => v.status !== 'Resolved').sort((a, b) => b.cvss - a.cvss).map((v, i) => (
+            <div key={v.id} className={`px-5 py-3 flex gap-4 items-start ${v.severity === 'Critical' ? 'bg-red-50/30' : ''}`}>
+              <div className="flex-shrink-0 mt-0.5">
+                <SeverityBadge severity={v.severity} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-[12px] font-bold text-blue-600 font-mono">{v.id}</p>
+                  <span className="text-gray-300">·</span>
+                  <p className="text-[12px] text-gray-700 font-mono">{v.component}</p>
+                  <span className="text-gray-300">·</span>
+                  <p className="text-[11px] text-gray-400 font-mono">{v.vm}</p>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5">{v.description}</p>
+              </div>
+              <span className={`font-mono font-black text-[13px] flex-shrink-0 ${v.cvss >= 9 ? 'text-red-700' : v.cvss >= 7 ? 'text-orange-600' : 'text-amber-600'}`}>
+                {v.cvss.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'rbac',  label: 'RBAC',            icon: '🔑' },
+  { id: 'ciso',  label: 'CISO',            icon: '🛡' },
+  { id: 'vulns', label: 'Vulnerabilities', icon: '🔍' },
+]
+
+export default function SecurityView() {
+  const [activeTab, setActiveTab] = useState('rbac')
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      {/* Page header */}
+      <div className="bg-white border-b border-gray-200 px-6 pt-5 pb-0">
+        <h1 className="text-[20px] font-bold text-gray-900 mb-1">Security</h1>
+        <p className="text-[12px] text-gray-400 mb-4">ChemCore International · Information Management Platform · 3 VMs</p>
+
+        {/* Top-level tab bar */}
+        <div className="flex gap-0 border-b border-gray-100 -mb-px">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex items-center gap-1.5 px-5 py-2.5 text-[13px] font-semibold transition-colors
+                ${activeTab === tab.id
+                  ? 'text-gray-900 border-b-2 border-gray-900'
+                  : 'text-gray-400 hover:text-gray-600 border-b-2 border-transparent'
+                }`}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 p-6 max-w-6xl">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === 'rbac'  && <RBACTab />}
+            {activeTab === 'ciso'  && <CISOTab />}
+            {activeTab === 'vulns' && <VulnerabilitiesTab />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   )
