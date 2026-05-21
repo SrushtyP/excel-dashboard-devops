@@ -1,6 +1,6 @@
 ﻿---
 - name: Snooze VM (stop Flask)
-  hosts: webservers
+  hosts: vm_running
   become: yes
 
   tasks:
