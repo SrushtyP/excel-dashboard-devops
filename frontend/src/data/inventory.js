@@ -1,19 +1,27 @@
 // inventory.js — ChemCore International / Nouryon IM Platform
 // Business metadata only. Live state + costs come from /api/vms
+//
+// Three datacenters:
+//   PRIMARY   — South Africa North (Johannesburg) — real Azure VMs
+//   SECONDARY — South Africa West  (Cape Town)    — demo VMs
+//   DR        — Southeast Asia     (Singapore)    — demo VMs
 
 export const INITIAL_DATACENTERS = [
+
+  // ── PRIMARY — South Africa North ──────────────────────────────────────────
+  // Real Azure VMs. Live state merged at runtime via useAzureVMs().
   {
-    id: 'dc-mumbai',
-    name: 'South Africa — Azure',
+    id:       'dc-primary',
+    name:     'Primary — South Africa North',
     location: 'Johannesburg, ZA',
-    region: 'southafricanorth',
-    active: true,
+    region:   'southafricanorth',
+    active:   true,
     racks: [
       {
-        id: 'rack-primary',
-        label: 'Primary VMs',
-        sublabel: 'Production workloads',
-        active: true,
+        id:       'rack-primary',
+        label:    'Production VMs',
+        sublabel: 'Live compliance & R&D workloads',
+        active:   true,
         vms: [
           {
             id: 'vm-running',
@@ -28,7 +36,7 @@ export const INITIAL_DATACENTERS = [
             contact: 'compliance-team@chemcore.com',
             unit: 'Global Compliance',
             priority: 'critical',
-            environment: 'productin',
+            environment: 'production',
             snooze: null,
             businessNeed: '24/7 availability for regulatory bodies across 82 countries. Hosts the live Excel Dashboard for client demos.',
           },
@@ -42,13 +50,21 @@ export const INITIAL_DATACENTERS = [
             size: 'Standard_B2ats_v2',
             costHrUsd: 0.0122, monthlyUsd: 8.91, optimisedMonthlyUsd: 3.22, savingsUsd: 5.69,
             costHrInr: 1.02,   monthlyInr: 744,  optimisedMonthlyInr: 269,  savingsInr: 475,
-            contact: '',
+            contact: 'rnd-mumbai@chemcore.com',
             unit: 'R&D Mumbai',
             priority: 'medium',
             environment: 'staging',
             snooze: { sleep: '20:00', wake: '08:00', tz: 'Asia/Kolkata', days: 'Weekdays' },
             businessNeed: 'Active 8am–8pm IST weekdays only. Snoozed overnight and weekends. Saves 64% vs always-on.',
           },
+        ],
+      },
+      {
+        id:       'rack-primary-ephemeral',
+        label:    'Ephemeral VMs',
+        sublabel: 'On-demand audit compute',
+        active:   true,
+        vms: [
           {
             id: 'vm-destroyed',
             alias: 'CPCB Audit Generator',
@@ -69,10 +85,29 @@ export const INITIAL_DATACENTERS = [
         ],
       },
       {
-        id: 'rack-secondary',
-        label: 'Secondary VMs',
+        id:       'rack-primary-dr',
+        label:    'DR Standby VMs',
+        sublabel: 'Warm standby for primary',
+        active:   false,
+        vms:      [],
+      },
+    ],
+  },
+
+  // ── SECONDARY — South Africa West ─────────────────────────────────────────
+  // Demo VMs. Same VM size / cost as primary for consistency.
+  {
+    id:       'dc-secondary',
+    name:     'Secondary — South Africa West',
+    location: 'Cape Town, ZA',
+    region:   'southafricawest',
+    active:   true,
+    racks: [
+      {
+        id:       'rack-sec-prod',
+        label:    'Production VMs',
         sublabel: 'Failover & load sharing',
-        active: true,
+        active:   true,
         vms: [
           {
             id: 'vm-sec-api',
@@ -91,6 +126,31 @@ export const INITIAL_DATACENTERS = [
             snooze: null,
             businessNeed: 'Secondary API gateway for load testing and pre-production validation. Snoozed when not under active test.',
           },
+          {
+            id: 'vm-sec-portal',
+            alias: 'Compliance Portal — Failover',
+            fullName: 'vm-sec-portal',
+            purpose: 'Hot standby for compliance portal',
+            state: 'snoozed',
+            cpu: 2, memGb: 1, diskGb: 30,
+            size: 'Standard_B2ats_v2',
+            costHrUsd: 0.0122, monthlyUsd: 8.91, optimisedMonthlyUsd: 3.22, savingsUsd: 5.69,
+            costHrInr: 1.02,   monthlyInr: 744,  optimisedMonthlyInr: 269,  savingsInr: 475,
+            contact: 'compliance-team@chemcore.com',
+            unit: 'Global Compliance',
+            priority: 'high',
+            environment: 'production',
+            snooze: null,
+            businessNeed: 'Hot standby for compliance portal. Activates automatically during primary failover. Kept snoozed otherwise.',
+          },
+        ],
+      },
+      {
+        id:       'rack-sec-batch',
+        label:    'Batch Processing VMs',
+        sublabel: 'Report generation queue',
+        active:   true,
+        vms: [
           {
             id: 'vm-sec-db',
             alias: 'Data Processing Node',
@@ -111,10 +171,29 @@ export const INITIAL_DATACENTERS = [
         ],
       },
       {
-        id: 'rack-dr',
-        label: 'Disaster Recovery VMs',
-        sublabel: 'Geo-redundant standby',
-        active: true,
+        id:       'rack-sec-mgmt',
+        label:    'Management VMs',
+        sublabel: 'Ops & monitoring',
+        active:   false,
+        vms:      [],
+      },
+    ],
+  },
+
+  // ── DISASTER RECOVERY — Southeast Asia ────────────────────────────────────
+  // Demo VMs. Geo-redundant cold standby in Singapore.
+  {
+    id:       'dc-dr',
+    name:     'Disaster Recovery — Southeast Asia',
+    location: 'Singapore',
+    region:   'southeastasia',
+    active:   true,
+    racks: [
+      {
+        id:       'rack-dr-cold',
+        label:    'Cold Standby VMs',
+        sublabel: 'Geo-redundant recovery',
+        active:   true,
         vms: [
           {
             id: 'vm-dr-primary',
@@ -134,6 +213,31 @@ export const INITIAL_DATACENTERS = [
             businessNeed: 'Disaster recovery node. Kept snoozed — can be started within 2 minutes if primary fails.',
           },
           {
+            id: 'vm-dr-portal',
+            alias: 'Compliance Portal — DR',
+            fullName: 'vm-dr-portal',
+            purpose: 'Cold DR replica of compliance portal',
+            state: 'snoozed',
+            cpu: 2, memGb: 1, diskGb: 30,
+            size: 'Standard_B2ats_v2',
+            costHrUsd: 0.0122, monthlyUsd: 8.91, optimisedMonthlyUsd: 3.22, savingsUsd: 5.69,
+            costHrInr: 1.02,   monthlyInr: 744,  optimisedMonthlyInr: 269,  savingsInr: 475,
+            contact: 'compliance-team@chemcore.com',
+            unit: 'Global Compliance',
+            priority: 'critical',
+            environment: 'dr',
+            snooze: null,
+            businessNeed: 'Cold DR replica — activates within 4h of primary failure declaration. Data synced hourly.',
+          },
+        ],
+      },
+      {
+        id:       'rack-dr-infra',
+        label:    'Infrastructure VMs',
+        sublabel: 'Network & DNS failover',
+        active:   true,
+        vms: [
+          {
             id: 'vm-dr-backup',
             alias: 'Backup & Restore Engine',
             fullName: 'vm-dr-backup',
@@ -152,6 +256,13 @@ export const INITIAL_DATACENTERS = [
           },
         ],
       },
+      {
+        id:       'rack-dr-test',
+        label:    'DR Test VMs',
+        sublabel: 'Quarterly DR drill environment',
+        active:   false,
+        vms:      [],
+      },
     ],
   },
 ]
@@ -165,7 +276,7 @@ export const COST_SUMMARY = {
   creditUsedInr:          3200,
 }
 
-// ── State metadata used by StatusDot and VM cards ──────────────────────────
+// ── State metadata used by StatusDot and VM cards ─────────────────────────
 export const STATE_META = {
   running: {
     label:  'Online',
