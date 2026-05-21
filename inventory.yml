@@ -32,7 +32,7 @@ vms:
     purpose: "Mumbai R&D Lab Testing Environment"
     size: Standard_B2ats_v2
     location: southafricanorth
-    state: running
+    state: snoozed
     enabled: true
     snooze_schedule:
       enabled: true

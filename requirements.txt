@@ -1,9 +1,5 @@
 flask
 flask-cors
-pandas
-openpyxl
-plotly
-pyyaml
 azure-identity
 azure-mgmt-compute
 azure-mgmt-consumption
