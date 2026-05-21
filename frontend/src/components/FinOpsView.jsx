@@ -136,6 +136,148 @@ function VMDetail({ vm, onClose }) {
 }
 
 
+// ── Resize Impact Modal (fixed overlay, blurred background) ───────────────────
+function ResizeImpactModal({ selected, currentVm, currentPrice, curMonthly, onClose }) {
+  const newMonthly = selected.retailPrice * 730
+  const saving     = curMonthly - newMonthly
+  const savingPct  = Math.round((saving / curMonthly) * 100)
+  const isCheaper  = saving >= 0
+
+  // Close on Escape key
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', background: 'rgba(15,23,42,0.45)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 28, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        style={{ boxShadow: '0 24px 64px rgba(26,71,128,0.22), 0 4px 16px rgba(0,0,0,0.12)' }}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 flex items-center justify-between"
+          style={{ background: isCheaper ? 'linear-gradient(135deg,#F0FDF4,#ECFDF5)' : 'linear-gradient(135deg,#FFF7ED,#FEF2F2)', borderBottom: `1px solid ${isCheaper ? '#BBF7D0' : '#FECACA'}` }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+              style={{ background: isCheaper ? '#DCFCE7' : '#FEE2E2', border: `1.5px solid ${isCheaper ? '#86EFAC' : '#FCA5A5'}` }}>
+              {isCheaper ? '📉' : '📈'}
+            </div>
+            <div>
+              <h2 className="text-[15px] font-black text-gray-900">Resize Impact Summary</h2>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {currentVm} → <span className="font-bold text-gray-700">{selected.armSkuName || selected.skuName}</span>
+              </p>
+            </div>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.08, backgroundColor: '#F3F4F6' }}
+            whileTap={{ scale: 0.94 }}
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors text-[14px]"
+          >✕</motion.button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Cost comparison grid */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Current',     value: `$${curMonthly.toFixed(2)}`, sub: `$${currentPrice.toFixed(4)}/hr`,            color: '#1A4780', bg: '#EFF6FF', border: '#BFDBFE' },
+              { label: 'New Cost',    value: `$${newMonthly.toFixed(2)}`,  sub: `$${selected.retailPrice.toFixed(4)}/hr`,    color: '#059669', bg: '#F0FDF4', border: '#BBF7D0' },
+              { label: isCheaper ? 'You Save' : 'Extra Cost',
+                value: `$${Math.abs(saving).toFixed(2)}`,
+                sub: `${Math.abs(savingPct)}% ${isCheaper ? 'cheaper' : 'more expensive'}`,
+                color: isCheaper ? '#059669' : '#DC2626',
+                bg: isCheaper ? '#F0FDF4' : '#FEF2F2',
+                border: isCheaper ? '#BBF7D0' : '#FECACA' },
+            ].map(c => (
+              <div key={c.label} className="rounded-xl p-3 text-center border"
+                style={{ background: c.bg, borderColor: c.border }}>
+                <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: c.color }}>{c.label}</p>
+                <p className="text-[20px] font-black leading-none" style={{ color: c.color }}>{c.value}</p>
+                <p className="text-[9px] text-gray-400 mt-1">{c.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Annual projection */}
+          <div className="rounded-xl p-4 border"
+            style={{ background: isCheaper ? '#F0FDF4' : '#FEF2F2', borderColor: isCheaper ? '#86EFAC' : '#FCA5A5' }}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5"
+                  style={{ color: isCheaper ? '#166534' : '#991B1B' }}>
+                  {isCheaper ? '📈 Annual Savings' : '📉 Annual Extra Cost'}
+                </p>
+                <p className="text-[28px] font-black leading-none"
+                  style={{ color: isCheaper ? '#166534' : '#991B1B' }}>
+                  ${Math.abs(saving * 12).toFixed(2)}
+                  <span className="text-[12px] font-normal text-gray-400 ml-1">/year</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-gray-500">Monthly delta</p>
+                <p className="text-[16px] font-bold" style={{ color: isCheaper ? '#166534' : '#991B1B' }}>
+                  {isCheaper ? '−' : '+'}${Math.abs(saving).toFixed(2)}/mo
+                </p>
+                <p className="text-[9px] text-gray-400">{Math.abs(savingPct)}% {isCheaper ? 'reduction' : 'increase'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* VM details row */}
+          <div className="grid grid-cols-2 gap-3 text-[11px]">
+            <div className="rounded-lg p-3 bg-gray-50 border border-gray-100">
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Current VM</p>
+              <p className="font-bold text-gray-800">{currentVm}</p>
+              <p className="text-gray-500 mt-0.5">${currentPrice.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</p>
+            </div>
+            <div className="rounded-lg p-3 border" style={{ background: '#EFF6FF', borderColor: '#BFDBFE' }}>
+              <p className="text-[9px] font-black uppercase tracking-widest text-nouryon-blue mb-2">Selected VM</p>
+              <p className="font-bold text-gray-800">{selected.armSkuName || selected.skuName}</p>
+              <p className="text-gray-500 mt-0.5">${selected.retailPrice.toFixed(4)}/hr · ${newMonthly.toFixed(2)}/mo</p>
+            </div>
+          </div>
+
+          {/* How to apply */}
+          <div className="rounded-lg p-3 bg-gray-50 border border-gray-100">
+            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">ℹ How to Apply</p>
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              Update <code className="bg-gray-200 px-1 rounded font-mono text-[10px]">variable "vm_size"</code> default
+              in <code className="bg-gray-200 px-1 rounded font-mono text-[10px]">terraform/variables.tf</code> to{' '}
+              <code className="bg-blue-100 px-1 rounded font-mono text-[10px] text-blue-700">{selected.armSkuName || selected.skuName}</code>,
+              then push to <code className="bg-gray-200 px-1 rounded font-mono text-[10px]">main</code> to trigger the pipeline.
+            </p>
+          </div>
+
+          {/* Close button */}
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl text-[12px] font-bold text-white transition-colors"
+            style={{ background: '#1A4780' }}
+          >
+            Close
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ── VM Resize Calculator ───────────────────────────────────────────────────────
 // Uses Azure Retail Prices API — public, no auth required
 function ResizeCalculator() {
@@ -314,29 +456,18 @@ function ResizeCalculator() {
         </div>
       )}
 
-      {/* Resize impact summary */}
-      {selected && (
-        <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
-          className="mt-4 p-4 rounded-xl border"
-          style={{background:'#F0FDF4',borderColor:'#BBF7D0'}}>
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-700 mb-3">📊 Resize Impact Summary</p>
-          <div className="flex flex-wrap gap-5 text-[12px]">
-            <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.armSkuName || selected.skuName}</strong></div>
-            <div><span className="text-gray-500">New cost:</span> <strong>${selected.retailPrice.toFixed(4)}/hr · ${(selected.retailPrice*730).toFixed(2)}/mo</strong></div>
-            <div><span className="text-gray-500">Current:</span> ${CURRENT_PRICE.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</div>
-            {(() => {
-              const saving = curMonthly - selected.retailPrice*730
-              const pct    = Math.round((saving/curMonthly)*100)
-              return saving >= 0
-                ? <div className="font-bold text-green-700">📈 Save ${saving.toFixed(2)}/mo · ${(saving*12).toFixed(2)}/yr ({pct}% cheaper)</div>
-                : <div className="font-bold text-red-600">📉 +${Math.abs(saving).toFixed(2)}/mo additional cost (+{Math.abs(pct)}%)</div>
-            })()}
-          </div>
-          <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
-            ℹ To apply: update <code className="bg-gray-100 px-1 rounded">variable "vm_size"</code> default in <code className="bg-gray-100 px-1 rounded">terraform/variables.tf</code> and push to <code className="bg-gray-100 px-1 rounded">main</code>
-          </p>
-        </motion.div>
-      )}
+      {/* Resize Impact Summary modal — rendered via portal at top level */}
+      <AnimatePresence>
+        {selected && (
+          <ResizeImpactModal
+            selected={selected}
+            currentVm={CURRENT_VM}
+            currentPrice={CURRENT_PRICE}
+            curMonthly={curMonthly}
+            onClose={() => setSelected(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {!items.length && !loading && !error && (
         <p className="text-[11px] text-gray-400 text-center py-6">
@@ -457,7 +588,7 @@ export default function FinOpsView({ datacenters }) {
           {activeTab==='overview' && (
             <motion.div key="overview" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="space-y-5">
 
-              {/* Daily spend — full width */}
+              {/* 1. Daily Azure Spend — full width */}
               {daily.length>0 && (
                 <Section title="Daily Azure Spend — Last 30 Days" badge="Real Azure data · USD" delay={0.18}>
                   <ResponsiveContainer width="100%" height={200}>
@@ -479,11 +610,30 @@ export default function FinOpsView({ datacenters }) {
                 </Section>
               )}
 
-              {/* Two charts side by side */}
+              {/* 2. Cost Optimisation Story */}
+              <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.20}}
+                className="bg-gradient-to-r from-blue-50 to-teal-50 rounded-xl border border-blue-100 p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3">Cost Optimisation Story</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                  {[
+                    ['Without optimisation',  usd(totalFullUsd),  '/month', '#BE0032'],
+                    ['With snooze + destroy',  usd(totalOptUsd),   '/month', '#1EA03C'],
+                    ['Annual savings',         usd(totalSavUsd*12),'/year',  '#1A4780'],
+                  ].map(([l,v,u,c])=>(
+                    <div key={l}>
+                      <p className="text-[10px] text-gray-500 mb-1">{l}</p>
+                      <p className="text-[22px] font-black leading-none" style={{color:c}}>{v}</p>
+                      <p className="text-[10px] text-gray-400">{u}</p>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* 3. Two charts side by side */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
                 {/* By service pie */}
-                <Section title="Cost by Azure Service (MTD)" badge="Top 6" delay={0.22}>
+                <Section title="Cost by Azure Service (MTD)" badge="Top 6" delay={0.25}>
                   {servicePie.length>0 ? (
                     <div className="flex items-start gap-4">
                       <ResponsiveContainer width={130} height={130}>
@@ -515,7 +665,7 @@ export default function FinOpsView({ datacenters }) {
                 </Section>
 
                 {/* VM state pie */}
-                <Section title="VM State Distribution" delay={0.24}>
+                <Section title="VM State Distribution" delay={0.27}>
                   <div className="flex items-center gap-6">
                     <ResponsiveContainer width={130} height={130}>
                       <PieChart>
@@ -544,12 +694,12 @@ export default function FinOpsView({ datacenters }) {
                 </Section>
               </div>
 
-              {/* Resource group bars + VM cost side by side */}
+              {/* 4. Resource group bars + VM cost side by side */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
                 {/* By resource group */}
                 {Object.keys(byRg).length>0 && (
-                  <Section title="Cost by Resource Group (MTD)" badge="Live Azure data" delay={0.27}>
+                  <Section title="Cost by Resource Group (MTD)" badge="Live Azure data" delay={0.30}>
                     <div className="space-y-2">
                       {Object.entries(byRg).sort(([,a],[,b])=>b-a).map(([rg,cost],i)=>{
                         const total = Object.values(byRg).reduce((s,v)=>s+v,0)
@@ -572,7 +722,7 @@ export default function FinOpsView({ datacenters }) {
                 )}
 
                 {/* VM cost bar */}
-                <Section title="VM Cost Breakdown (Opt/mo)" delay={0.29}>
+                <Section title="VM Cost Breakdown (Opt/mo)" delay={0.32}>
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={vmBarData} layout="vertical" margin={{top:0,right:40,left:0,bottom:0}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
@@ -589,26 +739,7 @@ export default function FinOpsView({ datacenters }) {
                 </Section>
               </div>
 
-              {/* Savings story */}
-              <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.35}}
-                className="bg-gradient-to-r from-blue-50 to-teal-50 rounded-xl border border-blue-100 p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3">Cost Optimisation Story</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                  {[
-                    ['Without optimisation',usd(totalFullUsd),'/month','#BE0032'],
-                    ['With snooze + destroy',usd(totalOptUsd),'/month','#1EA03C'],
-                    ['Annual savings',usd(totalSavUsd*12),'/year','#1A4780'],
-                  ].map(([l,v,u,c])=>(
-                    <div key={l}>
-                      <p className="text-[10px] text-gray-500 mb-1">{l}</p>
-                      <p className="text-[22px] font-black leading-none" style={{color:c}}>{v}</p>
-                      <p className="text-[10px] text-gray-400">{u}</p>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* VM Resize Calculator */}
+              {/* 5. VM Family Switch & Resize Calculator */}
               <ResizeCalculator />
             </motion.div>
           )}

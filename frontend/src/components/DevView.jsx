@@ -124,7 +124,7 @@ export const INITIAL_DATACENTERS = [
       },
       {
         id:       'rack-primary-quality',
-        label:    'Quality',
+        label:    'Testing',
         sublabel: 'QA & staging validation',
         env:      'quality',
         active:   true,
@@ -134,7 +134,7 @@ export const INITIAL_DATACENTERS = [
             alias:               'QA regression suite',
             state:               'snoozed',
             env:                 'quality',
-            environment:         'quality',
+            environment:         'testing',
             contact:             'qa-team@chemcore.com',
             unit:                'QA Engineering',
             priority:            'medium',
@@ -239,7 +239,7 @@ export const INITIAL_DATACENTERS = [
       },
       {
         id:       'rack-sec-quality',
-        label:    'Quality',
+        label:    'Testing',
         sublabel: 'Secondary QA environment',
         env:      'quality',
         active:   false,
@@ -334,7 +334,7 @@ export const INITIAL_DATACENTERS = [
       },
       {
         id:       'rack-dr-quality',
-        label:    'Quality',
+        label:    'Testing',
         sublabel: 'DR validation & drill env',
         env:      'quality',
         active:   false,
@@ -375,11 +375,12 @@ function mergeAzureStates(datacenters, azureVms) {
       vms: rack.vms.map(vm => {
         const live = stateMap[vm.id]
         if (!live) return vm
-        // Only take state (and alias if present) from live — keep all local cost/env fields
+        // Only take state (and alias if present) from live — NEVER overwrite env/cost/rack fields
         return {
           ...vm,
           state: live.state ?? vm.state,
           alias: live.alias || vm.alias,
+          // env, optimisedMonthlyUsd, size, etc. always come from local config
         }
       }),
     })),
@@ -391,7 +392,7 @@ function mergeAzureStates(datacenters, azureVms) {
 const ENV_RACK_CFG = {
   production:  { label: 'PROD', color: '#1A4780', bg: '#EFF4FB', border: '#BDD0EA' },
   development: { label: 'DEV',  color: '#5B21B6', bg: '#F5F3FF', border: '#C4B5FD' },
-  quality:     { label: 'QA',   color: '#92400E', bg: '#FFFBEB', border: '#FCD34D' },
+  quality:     { label: 'TEST', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
 }
 
 const STATE_COLOR = {
@@ -585,7 +586,7 @@ function DatacenterCardNew({ dc, isSelected, onClick }) {
 const ENV_CFG_DETAIL = {
   production:  { label: 'Production',  color: '#1A4780', bg: '#EFF4FB', border: '#BDD0EA', dot: '#1A4780' },
   development: { label: 'Development', color: '#5B21B6', bg: '#F5F3FF', border: '#C4B5FD', dot: '#6D28D9' },
-  quality:     { label: 'Quality',     color: '#92400E', bg: '#FFFBEB', border: '#FCD34D', dot: '#D97706' },
+  quality:     { label: 'Testing',     color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4', dot: '#0D9488' },
 }
 
 const STATE_CFG_DETAIL = {
