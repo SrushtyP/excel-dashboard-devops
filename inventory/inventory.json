@@ -49,7 +49,7 @@
       "id": "vm-snoozed",
       "alias": "Mumbai R&D Lab",
       "name": "vm-snoozed",
-      "desired_state": "running",
+      "desired_state": "snoozed",
       "location": "southafricanorth",
       "region_display": "South Africa North",
       "environment": "staging",
