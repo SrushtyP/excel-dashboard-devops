@@ -3,10 +3,10 @@ import Sidebar from './components/Sidebar'
 import DevView from './components/DevView'
 import FinOpsView from './components/FinOpsView'
 import AdminView from './components/AdminView'
-import PlaceholderView from './components/PlaceholderView'
 import { INITIAL_DATACENTERS } from './data/inventory'
 import GovernanceView from './components/GovernanceView'
 import SecurityView from './components/SecurityView'
+import MonitoringView from './components/MonitoringView'
 
 export default function App() {
   const [activeNav, setActiveNav]     = useState('dev')
@@ -35,7 +35,7 @@ export default function App() {
         {activeNav === 'dev'    && <DevView datacenters={datacenters} setDatacenters={setDatacenters} />}
         {activeNav === 'finops' && <FinOpsView datacenters={datacenters} />}
         {activeNav === 'admin'  && <AdminView />}
-        {activeNav === 'mon' && <PlaceholderView section="mon" />}
+        {activeNav === 'mon' && <MonitoringView datacenters={datacenters} />}
         {activeNav === 'sec' && <SecurityView datacenters={datacenters} />}
         {activeNav === 'gov' && <GovernanceView datacenters={datacenters} />}
       </main>
