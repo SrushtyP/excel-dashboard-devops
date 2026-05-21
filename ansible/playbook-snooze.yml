@@ -1,13 +1,17 @@
 ﻿---
-- name: Snooze VM (stop Flask)
-  hosts: vm_running
-  become: yes
+- name: Snooze VM via Azure CLI (deallocate)
+  hosts: localhost
+  gather_facts: no
 
   tasks:
-    - name: Kill Flask process
-      shell: kill $(cat /tmp/flask.pid) 2>/dev/null || true
-      ignore_errors: yes
+    - name: Deallocate VM in Azure
+      shell: |
+        az vm deallocate \
+          --resource-group $AZURE_RESOURCE_GROUP \
+          --name vm-snoozed
+      environment:
+        AZURE_RESOURCE_GROUP: "{{ lookup('env', 'AZURE_RESOURCE_GROUP') }}"
 
     - name: Print snooze status
       debug:
-        msg: "Flask stopped. VM marked as SNOOZED in inventory."
+        msg: "VM deallocated. Billing stopped. VM marked as SNOOZED."

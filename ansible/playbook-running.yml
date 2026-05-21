@@ -1,45 +1,30 @@
 ﻿---
-- name: Start VM (ensure running)
-  hosts: vm_running
-  become: yes
-
-  vars:
-    pat_token: ""
-    owner: ""
-    repo: "excel-dashboard-devops"
+- name: Start VM via Azure CLI
+  hosts: localhost
+  gather_facts: no
 
   tasks:
-    - name: Confirm VM is reachable
-      ping:
-
-    # ✅ Start Flask with PAT_TOKEN, OWNER, REPO and AZURE env vars
-    - name: Ensure Flask app is running
+    - name: Start VM in Azure
       shell: |
-        if [ -f /tmp/flask.pid ] && kill -0 $(cat /tmp/flask.pid) 2>/dev/null; then
-          echo "Flask already running"
-        else
-          cd /opt/dashboard-app && \
-          PAT_TOKEN="{{ pat_token }}" \
-          OWNER="{{ owner }}" \
-          REPO="{{ repo }}" \
-          AZURE_RESOURCE_GROUP="rg-dashboard-demo" \
-          nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
-          echo "Flask started"
-        fi
-      args:
-        executable: /bin/bash
+        az vm start \
+          --resource-group $AZURE_RESOURCE_GROUP \
+          --name vm-running
+      environment:
+        AZURE_RESOURCE_GROUP: "{{ lookup('env', 'AZURE_RESOURCE_GROUP') }}"
 
-    - name: Wait for Flask to be ready
+    - name: Wait for VM to be reachable on port 80
       wait_for:
+        host: "{{ lookup('env', 'VM_IP') }}"
         port: 80
-        host: 0.0.0.0
-        delay: 3
-        timeout: 30
+        delay: 15
+        timeout: 120
 
     - name: Confirm app is live
-      shell: curl -s -o /dev/null -w "%{http_code}" http://localhost:80
-      register: http_status
+      uri:
+        url: "http://{{ lookup('env', 'VM_IP') }}:80"
+        status_code: 200
+      register: result
 
     - name: Print status
       debug:
-        msg: "VM is RUNNING. HTTP Status: {{ http_status.stdout }}"
+        msg: "VM is RUNNING. HTTP Status: {{ result.status }}"

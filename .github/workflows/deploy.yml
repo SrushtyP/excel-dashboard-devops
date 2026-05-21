@@ -64,7 +64,7 @@ jobs:
           echo "vm-snoozed IP: $IP_SNOOZED"
 
       - name: Install Ansible and sshpass
-        run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass azure-cli
 
       - name: Create Ansible inventory
         run: |
@@ -112,7 +112,18 @@ jobs:
             -e "owner=${{ github.repository_owner }}" \
             -e "repo=excel-dashboard-devops"
 
+      - name: Azure CLI Login
+        run: |
+          az login --service-principal \
+            -u ${{ secrets.AZURE_CLIENT_ID }} \
+            -p ${{ secrets.AZURE_CLIENT_SECRET }} \
+            --tenant ${{ secrets.AZURE_TENANT_ID }}
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Run state playbooks per VM
+        env:
+          AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          VM_IP: ${{ steps.get_ip.outputs.ip_running }}
         run: |
           while IFS= read -r line; do
             VM_ID=$(echo "$line" | cut -d'|' -f1)
