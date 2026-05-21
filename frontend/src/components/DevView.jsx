@@ -387,6 +387,24 @@ function mergeAzureStates(datacenters, azureVms) {
   }))
 }
 
+// ─── Robust rack env resolver ─────────────────────────────────────────────────
+// Handles both new racks (with explicit env field) and old racks (no env field).
+// Falls back to inferring from rack.label or rack.id if env is missing.
+function resolveRackEnv(rack) {
+  if (rack.env) return rack.env
+  // Infer from label
+  const label = (rack.label || '').toLowerCase()
+  if (label.includes('production') || label.includes('prod')) return 'production'
+  if (label.includes('development') || label.includes('dev') || label.includes('ephemeral') || label.includes('feature') || label.includes('infra')) return 'development'
+  if (label.includes('quality') || label.includes('qa') || label.includes('test') || label.includes('staging') || label.includes('dr standby') || label.includes('disaster')) return 'quality'
+  // Infer from id
+  const id = (rack.id || '').toLowerCase()
+  if (id.includes('prod')) return 'production'
+  if (id.includes('dev') || id.includes('ephemeral') || id.includes('batch') || id.includes('mgmt') || id.includes('infra')) return 'development'
+  if (id.includes('quality') || id.includes('qa') || id.includes('test') || id.includes('dr')) return 'quality'
+  return 'development'
+}
+
 // ─── Rack strip used inside the datacenter card preview ──────────────────────
 
 const ENV_RACK_CFG = {
@@ -403,7 +421,7 @@ const STATE_COLOR = {
 }
 
 function RackStrip({ rack, index }) {
-  const cfg = ENV_RACK_CFG[rack.env] || ENV_RACK_CFG.development
+  const cfg = ENV_RACK_CFG[resolveRackEnv(rack)] || ENV_RACK_CFG.development
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -598,7 +616,7 @@ const STATE_CFG_DETAIL = {
 
 function RackDetailRow({ rack, dcRole, selectedVmId, onSelectVm, dcActive }) {
   const [open, setOpen] = useState(rack.vms.some(v => v.state !== 'offline') || rack.vms.length > 0)
-  const cfg = ENV_CFG_DETAIL[rack.env] || ENV_CFG_DETAIL.development
+  const cfg = ENV_CFG_DETAIL[resolveRackEnv(rack)] || ENV_CFG_DETAIL.development
   const running   = rack.vms.filter(v => v.state === 'running').length
   const snoozed   = rack.vms.filter(v => v.state === 'snoozed').length
   const destroyed = rack.vms.filter(v => v.state === 'destroyed').length
