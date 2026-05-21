@@ -1,5 +1,4 @@
-﻿#hi
-- name: Deploy Excel Dashboard App
+﻿- name: Deploy Excel Dashboard App
   hosts: vm_running
   become: yes
 
@@ -56,7 +55,7 @@
         src: ../app/security_ciso.py
         dest: "{{ app_dir }}/security_ciso.py"
         owner: "{{ app_user }}"
-        
+
     - name: Copy templates folder
       copy:
         src: ../app/templates/
@@ -93,87 +92,27 @@
         requirements: "{{ app_dir }}/requirements.txt"
         executable: pip3
 
-    - name: Install Node.js 20
-      shell: |
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-      args:
-        executable: /bin/bash
-
     - name: Install azure-mgmt-authorization
       pip:
         name: azure-mgmt-authorization
         executable: pip3
-    #✅ FIX: Create a tar archive of frontend source EXCLUDING node_modules and dist
-    - name: Create frontend source archive (excluding node_modules and dist)
-      delegate_to: localhost
-      become: no
-      shell: |
-        tar --exclude='../frontend/node_modules' \
-            --exclude='../frontend/dist' \
-            --exclude='../frontend/.git' \
-            -czf /tmp/frontend-src.tar.gz \
-            -C ../frontend .
-      args:
-        executable: /bin/bash
 
-    - name: Create frontend directory on VM
-      file:
-        path: "{{ app_dir }}/frontend"
-        state: directory
-        owner: "{{ app_user }}"
-        mode: '0755'
+    # ── Frontend: built on the GitHub Actions runner (not on the VM)
+    # The dist/ folder is produced before this playbook runs and
+    # simply copied here — no Node.js needed on the VM at all.
 
-    - name: Upload frontend archive to VM
-      copy:
-        src: /tmp/frontend-src.tar.gz
-        dest: /tmp/frontend-src.tar.gz
-
-    - name: Extract frontend source on VM
-      shell: |
-        tar -xzf /tmp/frontend-src.tar.gz -C {{ app_dir }}/frontend
-        rm -f /tmp/frontend-src.tar.gz
-      args:
-        executable: /bin/bash
-
-    - name: Set frontend directory ownership to azureuser
-      file:
-        path: "{{ app_dir }}/frontend"
-        state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_user }}"
-        recurse: yes
-
-    - name: Install frontend npm dependencies
-      shell: |
-        export PATH=$PATH:/usr/bin:/usr/local/bin
-        cd {{ app_dir }}/frontend
-        npm install
-        chmod -R 755 node_modules/.bin
-      become: yes
-      become_user: "{{ app_user }}"
-      args:
-        executable: /bin/bash
-
-    - name: Build React frontend
-      shell: |
-        export PATH=$PATH:/usr/bin:/usr/local/bin
-        cd /opt/dashboard-app/frontend
-        NODE_OPTIONS="--max-old-space-size=1024" ./node_modules/.bin/vite build
-      args:
-        executable: /bin/bash
-
-    - name: Create frontend-dist directory
+    - name: Create frontend-dist directory on VM
       file:
         path: /opt/frontend-dist
         state: directory
         owner: "{{ app_user }}"
         mode: '0755'
 
-    - name: Copy built frontend to serve location
-      shell: cp -r {{ app_dir }}/frontend/dist/. /opt/frontend-dist/
-      args:
-        executable: /bin/bash
+    - name: Upload built frontend dist to VM
+      copy:
+        src: ../frontend/dist/
+        dest: /opt/frontend-dist/
+        owner: "{{ app_user }}"
 
     - name: Kill existing Flask process
       shell: |
@@ -181,7 +120,6 @@
         sudo pkill -f "python3 app.py" 2>/dev/null || true
       ignore_errors: yes
 
-    # ✅ Start Flask with sudo (required for port 80) + env vars
     - name: Start Flask app in background
       shell: |
         cd {{ app_dir }} && \

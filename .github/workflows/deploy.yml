@@ -91,6 +91,12 @@ jobs:
             azureuser@${{ steps.get_ip.outputs.ip_running }} \
             "sudo apt update -y && sudo apt install python3-pip -y && sudo pip3 install flask flask-cors pandas openpyxl plotly pyyaml requests azure-identity azure-mgmt-compute azure-mgmt-consumption azure-mgmt-authorization"
 
+      - name: Build React frontend on runner
+        run: |
+          cd frontend
+          npm ci
+          NODE_OPTIONS="--max-old-space-size=4096" npx vite build
+
       - name: Run Ansible Playbook
         run: |
           ansible-playbook -i ansible/inventory.ini ansible/deploy.yml \
