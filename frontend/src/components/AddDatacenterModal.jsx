@@ -11,10 +11,11 @@ const REGIONS = [
 ]
 
 export default function AddDatacenterModal({ onAdd, onClose }) {
-  const [name, setName]     = useState('')
-  const [region, setRegion] = useState('')
+  const [name, setName]       = useState('')
+  const [region, setRegion]   = useState('')
+  const [custom, setCustom]   = useState('')
 
-  const displayName = name || (region ? `${REGIONS.find(r => r.id === region)?.name} — Azure` : '')
+  const displayName = name || (region ? `${REGIONS.find(r=>r.id===region)?.name} — Azure` : '')
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -22,11 +23,14 @@ export default function AddDatacenterModal({ onAdd, onClose }) {
     onAdd({
       id:       `dc-${region || 'custom'}-${Date.now()}`,
       name:     displayName || 'New Datacenter',
-      location: sel?.location || 'TBD',
+      location: sel?.location || custom || 'TBD',
       region:   region || 'custom',
       active:   false,
-      // New structure: flat vms array with env field (no racks)
-      vms: [],
+      racks: [
+        { id: `rack-p-${Date.now()}`,  label: 'Primary VMs',          sublabel: 'Production workloads',    active: false, vms: [] },
+        { id: `rack-s-${Date.now()}`,  label: 'Secondary VMs',        sublabel: 'Failover & load sharing', active: false, vms: [] },
+        { id: `rack-dr-${Date.now()}`, label: 'Disaster Recovery VMs', sublabel: 'Geo-redundant standby',  active: false, vms: [] },
+      ],
     })
     onClose()
   }
@@ -90,21 +94,10 @@ export default function AddDatacenterModal({ onAdd, onClose }) {
               />
             </div>
 
-            {/* Env types info */}
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 space-y-1.5">
-              <p className="text-[11px] font-bold text-nouryon-blue">VM Environment Types</p>
-              {[
-                ['Production',  '#1A4780', 'Live workloads — always-on'],
-                ['Quality',     '#D97706', 'Staging & QA — snooze-eligible'],
-                ['Development', '#6D28D9', 'Dev & ephemeral — destroy when done'],
-              ].map(([label, color, desc]) => (
-                <div key={label} className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
-                  <span className="text-[10px] text-gray-600"><strong>{label}</strong> — {desc}</span>
-                </div>
-              ))}
-              <p className="text-[10px] text-blue-600 mt-1">
-                VMs are added via the pipeline with an <code className="bg-white px-1 rounded border border-blue-200">env</code> field.
+            {/* Info box */}
+            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+              <p className="text-[11px] text-nouryon-blue leading-relaxed">
+                This datacenter will be added as a <strong>planned</strong> slot. It will show as inactive until racks and VMs are provisioned via the pipeline.
               </p>
             </div>
 
