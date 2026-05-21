@@ -32,8 +32,8 @@ vms:
     purpose: "Mumbai R&D Lab Testing Environment"
     size: Standard_B2ats_v2
     location: southafricanorth
-    state: snoozed
-    enabled: true
+    state: running
+    enabled: false
     snooze_schedule:
       enabled: true
       sleep_time: "20:00"
