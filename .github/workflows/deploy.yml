@@ -69,8 +69,15 @@ jobs:
       - name: Create Ansible inventory
         run: |
           cat > ansible/inventory.ini << EOF
+          [webservers]
+          ${{ steps.get_ip.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          ${{ steps.get_ip.outputs.ip_snoozed }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
           [vm_running]
           ${{ steps.get_ip.outputs.ip_running }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+          [vm_snoozed]
+          ${{ steps.get_ip.outputs.ip_snoozed }} ansible_user=azureuser ansible_password=${{ secrets.VM_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
           EOF
 
       - name: Create azure_config.json
