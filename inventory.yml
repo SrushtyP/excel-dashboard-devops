@@ -42,8 +42,8 @@ vms:
     purpose: "India CPCB Annual Audit Report Generator"
     size: Standard_B2ats_v2
     location: southafricanorth
-    state: running
-    enabled: true
+    state: destroyed
+    enabled: false
     snooze_schedule:
       enabled: false
     cost_per_hour_usd: 0.00
