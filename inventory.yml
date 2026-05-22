@@ -1,12 +1,3 @@
-# ============================================================
-# ChemCore International — Azure VM Inventory
-# ============================================================
-# HOW TO USE:
-#   Edit enabled: true/false to provision or destroy a VM
-#   Edit state to control VM behaviour
-#   Push to GitHub — pipeline handles everything automatically
-# ============================================================
-
 company: ChemCore International
 project: Information Management Platform
 last_updated: "2026-05-19"
