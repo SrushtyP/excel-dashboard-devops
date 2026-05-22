@@ -78,7 +78,7 @@
       "id": "vm-destroyed",
       "alias": "CPCB Audit Generator",
       "name": "vm-destroyed",
-      "desired_state": "destroyed",
+      "desired_state": "running",
       "location": "southafricanorth",
       "region_display": "South Africa North",
       "environment": "ephemeral",
