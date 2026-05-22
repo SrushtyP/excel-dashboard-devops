@@ -116,7 +116,7 @@ const ZBX_SEV_COLOR = {
   Average:     '#F59E0B',
   Warning:     '#EAB308',
   Information: '#3B82F6',
-  Not classified: '#9CA3AF',
+  'Not classified': '#9CA3AF',
 }
 
 const ZBX_METRICS_NOW = [
