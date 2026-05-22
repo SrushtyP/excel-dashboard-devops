@@ -55,6 +55,92 @@ const ALERTS = [
   { date: '14 May 2026', vm: 'chemcore-prod-web01', type: 'Network Spike',   sev: 'Medium',   desc: 'Inbound traffic 3× normal baseline',       dur: '2 hrs',   resolved: true  },
 ]
 
+// ─── SAP SOLUTION MANAGER DATA ───────────────────────────────────────────────
+
+const SAP_SYSTEMS = [
+  { sid: 'CCD', name: 'ChemCore Dev',  type: 'ECC 6.0', env: 'Development',  status: 'Green',  host: 'chemcore-dev-app01',  db: 'MaxDB', version: 'SAP NetWeaver 7.52' },
+  { sid: 'CCP', name: 'ChemCore Prod', type: 'ECC 6.0', env: 'Production',   status: 'Yellow', host: 'chemcore-prod-web01',  db: 'HANA',  version: 'SAP NetWeaver 7.52' },
+  { sid: 'CCQ', name: 'ChemCore QA',   type: 'ECC 6.0', env: 'Quality',      status: 'Green',  host: 'chemcore-prod-db01',   db: 'HANA',  version: 'SAP NetWeaver 7.52' },
+]
+
+const SAP_STATUS_COLOR = { Green: '#00ABA9', Yellow: '#F59E0B', Red: '#BE0032' }
+
+const SAP_JOBS = [
+  { job: 'CHEMCORE_BATCH_CLOSE',   system: 'CCP', last: '21 May 02:00', status: 'Finished', duration: '4m 32s', type: 'Period Closing' },
+  { job: 'MATERIAL_MASTER_SYNC',   system: 'CCP', last: '21 May 01:15', status: 'Finished', duration: '1m 48s', type: 'Master Data'    },
+  { job: 'FI_GL_RECON',            system: 'CCP', last: '20 May 22:00', status: 'Aborted',  duration: '—',      type: 'Finance'       },
+  { job: 'MM_GOODS_RECEIPT_REPT',  system: 'CCQ', last: '21 May 03:30', status: 'Finished', duration: '3m 10s', type: 'Logistics'     },
+  { job: 'SD_ORDER_EXPORT',        system: 'CCD', last: '21 May 00:45', status: 'Finished', duration: '2m 55s', type: 'Sales'         },
+  { job: 'BASIS_SYSTEM_HEALTH',    system: 'CCP', last: '21 May 05:00', status: 'Running',  duration: 'Active', type: 'Basis'         },
+  { job: 'PP_PROD_ORDER_CONFIRM',  system: 'CCD', last: '20 May 23:10', status: 'Finished', duration: '1m 02s', type: 'Production'    },
+  { job: 'QMNOTIF_ESCALATION',     system: 'CCQ', last: '20 May 18:00', status: 'Aborted',  duration: '—',      type: 'Quality'       },
+]
+
+const SAP_TRANSPORTS = [
+  { id: 'CCDK900312', desc: 'Batch input mapping update',   from: 'CCD', to: 'CCQ', by: 'srushty.naik',  date: '21 May 2026', status: 'Imported'   },
+  { id: 'CCDKP00481', desc: 'MM pricing condition fix',      from: 'CCQ', to: 'CCP', by: 'basis.admin',   date: '20 May 2026', status: 'Imported'   },
+  { id: 'CCDKD00219', desc: 'SD enhancement for export',    from: 'CCD', to: 'CCQ', by: 'srushty.naik',  date: '19 May 2026', status: 'In Queue'   },
+  { id: 'CCDKP00467', desc: 'FI-GL variance report fix',    from: 'CCQ', to: 'CCP', by: 'fi.consultant', date: '18 May 2026', status: 'Failed'     },
+  { id: 'CCDKD00204', desc: 'HR payroll schema correction', from: 'CCD', to: 'CCQ', by: 'hr.admin',      date: '17 May 2026', status: 'Imported'   },
+]
+
+const SAP_ALERTS_SM = [
+  { time: '21 May 08:42', system: 'CCP', category: 'Work Process', msg: 'Dialog WP utilisation at 94% — response time degraded', sev: 'Critical' },
+  { time: '21 May 07:15', system: 'CCP', category: 'Batch Jobs',   msg: 'FI_GL_RECON aborted — short dump DBIF_RSQL_SQL_ERROR',  sev: 'High'     },
+  { time: '20 May 22:30', system: 'CCQ', category: 'Transport',    msg: 'CCDKP00467 import failed on QA client 200',              sev: 'High'     },
+  { time: '20 May 15:00', system: 'CCD', category: 'Memory',       msg: 'ABAP heap usage above 85% threshold',                   sev: 'Medium'   },
+  { time: '19 May 11:10', system: 'CCQ', category: 'Batch Jobs',   msg: 'QMNOTIF_ESCALATION — DYNPRO_SEND_IN_BACKGROUND dump',   sev: 'High'     },
+  { time: '18 May 09:05', system: 'CCP', category: 'Database',     msg: 'HANA log backup delay > 20 min',                        sev: 'Medium'   },
+]
+
+// ─── ZABBIX DATA ──────────────────────────────────────────────────────────────
+
+const ZBX_HOSTS = [
+  { id: 'web01', host: 'chemcore-prod-web01', ip: '10.0.1.10', group: 'Prod Web',  agent: '6.4.2', status: 'Available', templates: ['Linux OS', 'Apache HTTP', 'SSL Cert'] },
+  { id: 'db01',  host: 'chemcore-prod-db01',  ip: '10.0.1.20', group: 'Prod DB',   agent: '6.4.2', status: 'Available', templates: ['Linux OS', 'MySQL 8.0',  'HANA DB']   },
+  { id: 'app01', host: 'chemcore-dev-app01',  ip: '10.0.2.10', group: 'Dev Apps',  agent: '6.4.1', status: 'Available', templates: ['Linux OS', 'Tomcat 10',  'JVM']       },
+]
+
+const ZBX_TRIGGERS = [
+  { host: 'chemcore-prod-db01',  name: 'High CPU utilisation',           sev: 'High',        status: 'Problem',  since: '21 May 08:12', duration: '30 min', acked: false },
+  { host: 'chemcore-prod-web01', name: 'SSL certificate expires in 14d', sev: 'Warning',     status: 'Problem',  since: '20 May 00:00', duration: '2 days', acked: true  },
+  { host: 'chemcore-dev-app01',  name: 'Disk free < 15% on /var',        sev: 'Warning',     status: 'Resolved', since: '19 May 14:20', duration: '4h 10m', acked: true  },
+  { host: 'chemcore-prod-db01',  name: 'MySQL InnoDB buffer pool high',  sev: 'Average',     status: 'Problem',  since: '21 May 07:45', duration: '55 min', acked: false },
+  { host: 'chemcore-prod-web01', name: 'Network input rate > 100 Mbps',  sev: 'Information', status: 'Resolved', since: '18 May 16:30', duration: '2h 00m', acked: true  },
+  { host: 'chemcore-dev-app01',  name: 'JVM heap usage > 85%',           sev: 'Average',     status: 'Problem',  since: '21 May 06:00', duration: '2h 42m', acked: false },
+]
+
+const ZBX_SEV_COLOR = {
+  Disaster:    '#BE0032',
+  High:        '#E45516',
+  Average:     '#F59E0B',
+  Warning:     '#EAB308',
+  Information: '#3B82F6',
+  Not classified: '#9CA3AF',
+}
+
+const ZBX_METRICS_NOW = [
+  { host: 'chemcore-prod-web01', metric: 'CPU Idle %',          value: '38.2 %',    ok: true  },
+  { host: 'chemcore-prod-web01', metric: 'Mem Available',        value: '3.8 GB',    ok: true  },
+  { host: 'chemcore-prod-web01', metric: 'HTTP Req/s',           value: '412 req/s', ok: true  },
+  { host: 'chemcore-prod-web01', metric: 'SSL Days Remaining',   value: '14 days',   ok: false },
+  { host: 'chemcore-prod-db01',  metric: 'CPU Idle %',           value: '4.1 %',     ok: false },
+  { host: 'chemcore-prod-db01',  metric: 'Mem Available',        value: '1.2 GB',    ok: false },
+  { host: 'chemcore-prod-db01',  metric: 'HANA Disk Used',       value: '78.4 %',    ok: true  },
+  { host: 'chemcore-prod-db01',  metric: 'MySQL Slow Queries/s', value: '8.3 /s',    ok: false },
+  { host: 'chemcore-dev-app01',  metric: 'CPU Idle %',           value: '61.7 %',    ok: true  },
+  { host: 'chemcore-dev-app01',  metric: 'JVM Heap Used',        value: '87.2 %',    ok: false },
+  { host: 'chemcore-dev-app01',  metric: 'Tomcat Threads',       value: '24 / 50',   ok: true  },
+  { host: 'chemcore-dev-app01',  metric: 'Disk /var Used',       value: '72.1 %',    ok: true  },
+]
+
+// Zabbix event history (last 8 days, one entry per day)
+const ZBX_EVENT_TREND = DAYS.map((day, i) => ({
+  day,
+  problems:  [2, 1, 3, 2, 4, 1, 3, 2][i],
+  resolved:  [2, 1, 2, 2, 3, 1, 2, 1][i],
+}))
+
 // ─── TINY HELPERS ────────────────────────────────────────────────────────────
 
 const SEV_STYLE = {
@@ -623,13 +709,410 @@ function AlertsTab() {
   )
 }
 
+function SapSolManTab() {
+  const [view, setView] = useState('overview')
+  const VIEWS = [
+    { id: 'overview',   label: 'Systems Overview' },
+    { id: 'jobs',       label: 'Background Jobs'  },
+    { id: 'transports', label: 'Transport Tracker' },
+    { id: 'alerts',     label: 'Early Watch Alerts' },
+  ]
+
+  const TrafficLight = ({ status }) => (
+    <span className="flex items-center gap-1.5 text-[11px] font-bold"
+      style={{ color: SAP_STATUS_COLOR[status] }}>
+      <span className="w-2.5 h-2.5 rounded-full"
+        style={{ background: SAP_STATUS_COLOR[status] }} />
+      {status}
+    </span>
+  )
+
+  const JobStatus = ({ s }) => {
+    const map = {
+      Finished: 'text-nouryon-green bg-green-50 border border-green-200',
+      Running:  'text-blue-600 bg-blue-50 border border-blue-200',
+      Aborted:  'text-red-700 bg-red-50 border border-red-200',
+    }
+    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${map[s] || ''}`}>{s}</span>
+  }
+
+  const TrStatus = ({ s }) => {
+    const map = {
+      Imported:  'text-nouryon-green bg-green-50 border border-green-200',
+      'In Queue': 'text-blue-600 bg-blue-50 border border-blue-200',
+      Failed:    'text-red-700 bg-red-50 border border-red-200',
+    }
+    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${map[s] || ''}`}>{s}</span>
+  }
+
+  const abortedJobs = SAP_JOBS.filter(j => j.status === 'Aborted').length
+  const failedTransports = SAP_TRANSPORTS.filter(t => t.status === 'Failed').length
+  const openSapAlerts = SAP_ALERTS_SM.filter(a => a.sev === 'Critical' || a.sev === 'High').length
+
+  return (
+    <div className="space-y-5">
+      {/* Header strip */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">SAP Solution Manager</h2>
+          <p className="text-[11px] text-gray-400">Central monitoring & transport management · ChemCore landscape · 3 systems</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+          <span className="w-2 h-2 rounded-full bg-nouryon-green animate-pulse" />
+          Connected to SolMan 7.2
+        </span>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-4 gap-4">
+        <KpiCard label="Managed Systems"   value="3"             sub="CCD · CCP · CCQ"       accentClass="border-nouryon-blue"  />
+        <KpiCard label="Aborted Jobs"      value={abortedJobs}   sub="Last 24 hours"          accentClass={abortedJobs > 0 ? 'border-red-600' : 'border-nouryon-green'} />
+        <KpiCard label="Failed Transports" value={failedTransports} sub="Needs re-import"    accentClass={failedTransports > 0 ? 'border-orange-500' : 'border-nouryon-green'} />
+        <KpiCard label="EWA Alerts"        value={openSapAlerts} sub="Critical + High"        accentClass={openSapAlerts > 0 ? 'border-red-600' : 'border-nouryon-green'} />
+      </div>
+
+      {/* Inner sub-nav */}
+      <div className="flex gap-2 flex-wrap">
+        {VIEWS.map(v => (
+          <button key={v.id} onClick={() => setView(v.id)}
+            className={`px-4 py-1.5 rounded-full text-[12px] font-bold border transition-all duration-150
+              ${view === v.id
+                ? 'bg-nouryon-blue text-white border-nouryon-blue'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-nouryon-blue hover:text-nouryon-blue'
+              }`}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Systems Overview ── */}
+      {view === 'overview' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            {SAP_SYSTEMS.map(sys => (
+              <div key={sys.sid}
+                className="bg-white rounded-xl border border-gray-200 p-5"
+                style={{ borderTop: `3px solid ${SAP_STATUS_COLOR[sys.status]}` }}>
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-[20px] font-black text-nouryon-blue">{sys.sid}</p>
+                    <p className="text-[11px] text-gray-500 font-semibold">{sys.name}</p>
+                  </div>
+                  <TrafficLight status={sys.status} />
+                </div>
+                <div className="space-y-1.5 text-[11px]">
+                  {[
+                    ['Type',        sys.type],
+                    ['Environment', sys.env],
+                    ['Host',        sys.host],
+                    ['Database',    sys.db],
+                    ['NetWeaver',   sys.version],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-2">
+                      <span className="text-gray-400">{k}</span>
+                      <span className="font-semibold text-gray-700 text-right">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Transport flow diagram */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="text-[12px] font-bold text-nouryon-blue uppercase tracking-widest mb-4">
+              Transport Landscape
+            </h3>
+            <div className="flex items-center justify-center gap-4">
+              {[
+                { sid: 'CCD', label: 'Development', sub: 'Client 100', color: '#FF5300' },
+                { sid: 'CCQ', label: 'Quality',      sub: 'Client 200', color: '#F59E0B' },
+                { sid: 'CCP', label: 'Production',   sub: 'Client 300', color: '#00ABA9' },
+              ].map((s, i, arr) => (
+                <div key={s.sid} className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="w-20 h-20 rounded-xl border-2 flex flex-col items-center justify-center mb-1"
+                      style={{ borderColor: s.color, background: `${s.color}10` }}>
+                      <span className="text-[18px] font-black" style={{ color: s.color }}>{s.sid}</span>
+                      <span className="text-[9px] text-gray-400">{s.sub}</span>
+                    </div>
+                    <p className="text-[10px] font-semibold text-gray-600">{s.label}</p>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[10px] text-gray-400">Transport</span>
+                      <span className="text-lg text-nouryon-blue">→</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Background Jobs ── */}
+      {view === 'jobs' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-[12px]" style={{ fontFamily: 'Arial, sans-serif' }}>
+            <thead>
+              <tr className="bg-nouryon-blue text-white text-[10px] font-bold uppercase tracking-widest">
+                {['Job Name', 'System', 'Type', 'Last Run', 'Status', 'Duration'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SAP_JOBS.map((j, i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#EFF4FA]'}>
+                  <td className="px-4 py-2.5 font-bold text-gray-800 font-mono text-[11px]">{j.job}</td>
+                  <td className="px-4 py-2.5 font-bold text-nouryon-blue">{j.system}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{j.type}</td>
+                  <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{j.last}</td>
+                  <td className="px-4 py-2.5"><JobStatus s={j.status} /></td>
+                  <td className="px-4 py-2.5 text-gray-500">{j.duration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Transport Tracker ── */}
+      {view === 'transports' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-[12px]" style={{ fontFamily: 'Arial, sans-serif' }}>
+            <thead>
+              <tr className="bg-nouryon-blue text-white text-[10px] font-bold uppercase tracking-widest">
+                {['TR Number', 'Description', 'From', 'To', 'By', 'Date', 'Status'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SAP_TRANSPORTS.map((t, i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#EFF4FA]'}>
+                  <td className="px-4 py-2.5 font-bold font-mono text-nouryon-blue text-[11px]">{t.id}</td>
+                  <td className="px-4 py-2.5 text-gray-700 max-w-[220px]">{t.desc}</td>
+                  <td className="px-4 py-2.5 font-bold text-gray-700">{t.from}</td>
+                  <td className="px-4 py-2.5 font-bold text-gray-700">{t.to}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{t.by}</td>
+                  <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{t.date}</td>
+                  <td className="px-4 py-2.5"><TrStatus s={t.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── EWA Alerts ── */}
+      {view === 'alerts' && (
+        <div className="space-y-3">
+          {SAP_ALERTS_SM.map((a, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4">
+              <SevBadge sev={a.sev} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[12px] font-bold text-nouryon-blue">{a.system}</span>
+                  <span className="text-[11px] text-gray-400">·</span>
+                  <span className="text-[11px] text-gray-500">{a.category}</span>
+                </div>
+                <p className="text-[12px] text-gray-700">{a.msg}</p>
+              </div>
+              <span className="text-[10px] text-gray-400 whitespace-nowrap">{a.time}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ZabbixTab() {
+  const [hostFilter, setHostFilter] = useState('all')
+
+  const activeProblems = ZBX_TRIGGERS.filter(t => t.status === 'Problem').length
+  const unackedProblems = ZBX_TRIGGERS.filter(t => t.status === 'Problem' && !t.acked).length
+
+  const filteredTriggers = hostFilter === 'all'
+    ? ZBX_TRIGGERS
+    : ZBX_TRIGGERS.filter(t => t.host.includes(hostFilter))
+
+  const SevChip = ({ sev }) => (
+    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
+      style={{
+        color: ZBX_SEV_COLOR[sev] || '#6B7280',
+        background: `${ZBX_SEV_COLOR[sev] || '#6B7280'}15`,
+        borderColor: `${ZBX_SEV_COLOR[sev] || '#6B7280'}40`,
+      }}>
+      {sev}
+    </span>
+  )
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">Zabbix</h2>
+          <p className="text-[11px] text-gray-400">Infrastructure monitoring · Zabbix 6.4 · 3 hosts · agent-based</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+          <span className="w-2 h-2 rounded-full bg-nouryon-green animate-pulse" />
+          Zabbix Server: zabbix.chemcore.int
+        </span>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-4 gap-4">
+        <KpiCard label="Monitored Hosts"   value={ZBX_HOSTS.length}   sub="All available"      accentClass="border-nouryon-blue" />
+        <KpiCard label="Active Problems"   value={activeProblems}     sub="Currently open"     accentClass={activeProblems > 0 ? 'border-red-600' : 'border-nouryon-green'} />
+        <KpiCard label="Unacknowledged"    value={unackedProblems}    sub="Needs attention"    accentClass={unackedProblems > 0 ? 'border-orange-500' : 'border-nouryon-green'} />
+        <KpiCard label="Triggers Total"    value={ZBX_TRIGGERS.length} sub="All severities"   accentClass="border-nouryon-blue" />
+      </div>
+
+      {/* Event trend */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="text-[12px] font-bold text-nouryon-blue uppercase tracking-widest mb-3">
+          Problem / Resolved Events — 14–21 May
+        </h3>
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={ZBX_EVENT_TREND} barGap={3} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+            <XAxis dataKey="day" tick={{ fontSize: 10, fontFamily: 'Arial' }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10, fontFamily: 'Arial' }} />
+            <Tooltip content={<ChartTooltip />} />
+            <Bar dataKey="problems" fill="#BE0032" radius={[3, 3, 0, 0]} name="Problems" />
+            <Bar dataKey="resolved" fill="#00ABA9" radius={[3, 3, 0, 0]} name="Resolved" />
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex gap-5 mt-2">
+          {[['Problems', '#BE0032'], ['Resolved', '#00ABA9']].map(([l, c]) => (
+            <span key={l} className="flex items-center gap-1.5 text-[11px] text-gray-500">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: c }} />
+              {l}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Host cards with current metric values */}
+      <div>
+        <h3 className="text-[12px] font-bold text-nouryon-blue uppercase tracking-widest mb-3">
+          Host Metric Snapshot (Latest Values)
+        </h3>
+        <div className="grid grid-cols-3 gap-4">
+          {ZBX_HOSTS.map(h => {
+            const metrics = ZBX_METRICS_NOW.filter(m => m.host === h.host)
+            return (
+              <div key={h.id} className="bg-white rounded-xl border border-gray-200 p-4"
+                style={{ borderTop: `3px solid ${VM_COLOR[h.id]}` }}>
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-[12px] font-bold" style={{ color: VM_COLOR[h.id] }}>
+                      {h.host.replace('chemcore-', '')}
+                    </p>
+                    <p className="text-[10px] text-gray-400">{h.ip} · {h.group}</p>
+                  </div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-nouryon-green">
+                    <span className="w-1.5 h-1.5 rounded-full bg-nouryon-green" />{h.status}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {metrics.map((m, i) => (
+                    <div key={i} className="flex justify-between items-center text-[11px]">
+                      <span className="text-gray-400">{m.metric}</span>
+                      <span className={`font-bold ${m.ok ? 'text-gray-700' : 'text-red-600'}`}>
+                        {m.ok ? '' : '⚠ '}{m.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1">
+                  {h.templates.map(t => (
+                    <span key={t} className="text-[9px] bg-[#EFF4FA] text-nouryon-blue rounded px-1.5 py-0.5 font-semibold">{t}</span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Trigger / Problem list */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-nouryon-blue uppercase tracking-widest">
+            Triggers &amp; Problems
+          </h3>
+          <div className="flex gap-2">
+            {['all', 'web01', 'db01', 'app01'].map(f => (
+              <button key={f} onClick={() => setHostFilter(f)}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-all duration-150
+                  ${hostFilter === f
+                    ? 'bg-nouryon-blue text-white border-nouryon-blue'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-nouryon-blue hover:text-nouryon-blue'
+                  }`}>
+                {f === 'all' ? 'All Hosts' : f}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-[12px]" style={{ fontFamily: 'Arial, sans-serif' }}>
+            <thead>
+              <tr className="bg-nouryon-blue text-white text-[10px] font-bold uppercase tracking-widest">
+                {['Host', 'Trigger Name', 'Severity', 'Status', 'Since', 'Duration', 'Ack'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTriggers.map((t, i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#EFF4FA]'}>
+                  <td className="px-4 py-2.5 font-bold text-nouryon-blue whitespace-nowrap text-[11px]">
+                    {t.host.replace('chemcore-', '')}
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-700">{t.name}</td>
+                  <td className="px-4 py-2.5"><SevChip sev={t.sev} /></td>
+                  <td className="px-4 py-2.5">
+                    {t.status === 'Problem'
+                      ? <span className="text-[10px] font-bold text-red-600 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />Problem
+                        </span>
+                      : <span className="text-[10px] font-bold text-nouryon-green flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-nouryon-green" />Resolved
+                        </span>
+                    }
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{t.since}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{t.duration}</td>
+                  <td className="px-4 py-2.5">
+                    {t.acked
+                      ? <span className="text-[10px] font-bold text-nouryon-green">✓ Yes</span>
+                      : <span className="text-[10px] font-bold text-orange-500">Pending</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN MONITORING VIEW ─────────────────────────────────────────────────────
 
 const SUB_TABS = [
-  { id: 'overview', label: 'Overview',       icon: '📊' },
-  { id: 'cpu',      label: 'CPU & Memory',   icon: '🖥️' },
-  { id: 'network',  label: 'Network & IOPS', icon: '🌐' },
-  { id: 'alerts',   label: 'Alerts',         icon: '🔔', badge: ALERTS.filter(a => !a.resolved).length },
+  { id: 'overview', label: 'Overview',          icon: '📊' },
+  { id: 'cpu',      label: 'CPU & Memory',      icon: '🖥️' },
+  { id: 'network',  label: 'Network & IOPS',    icon: '🌐' },
+  { id: 'alerts',   label: 'Alerts',            icon: '🔔', badge: ALERTS.filter(a => !a.resolved).length },
+  { id: 'sap',      label: 'SAP Solution Mgr',  icon: '🟩', badge: SAP_ALERTS_SM.filter(a => a.sev === 'Critical').length || undefined },
+  { id: 'zabbix',   label: 'Zabbix',            icon: '🔵', badge: ZBX_TRIGGERS.filter(t => t.status === 'Problem' && !t.acked).length || undefined },
 ]
 
 export default function MonitoringView() {
@@ -640,6 +1123,8 @@ export default function MonitoringView() {
     cpu:      <CpuMemoryTab />,
     network:  <NetworkIopsTab />,
     alerts:   <AlertsTab />,
+    sap:      <SapSolManTab />,
+    zabbix:   <ZabbixTab />,
   }
 
   return (
@@ -649,7 +1134,7 @@ export default function MonitoringView() {
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <h1 className="text-[20px] font-bold text-gray-900">Monitoring</h1>
         <p className="text-[12px] text-gray-500 mt-0.5">
-          ChemCore International · Nouryon IM Platform · 3 VMs · Azure Monitor
+          ChemCore International · Nouryon IM Platform · 3 VMs · Azure Monitor · SAP SolMan · Zabbix
         </p>
       </div>
 
