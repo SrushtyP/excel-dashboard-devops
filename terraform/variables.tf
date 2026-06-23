@@ -18,7 +18,7 @@ variable "admin_username" {
 
 # Change this if capacity issues occur — no need to touch main.tf
 variable "vm_size" {
-  default = "Standard_B2ats_v2"
+  default = "Standard_B1s"
 }
 
 # Set to true to provision vm-destroyed, false to destroy it
