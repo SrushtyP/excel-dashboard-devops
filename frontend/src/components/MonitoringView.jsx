@@ -652,7 +652,7 @@ export default function MonitoringView() {
           ChemCore International · Nouryon IM Platform · 3 VMs · Azure Monitor
         </p>
       </div>
-{/* sample comment */}
+
       {/* Sub-tab bar */}
       <div className="bg-white border-b border-gray-200 px-6">
         <div className="flex gap-0">
