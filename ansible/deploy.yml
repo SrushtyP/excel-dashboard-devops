@@ -126,7 +126,7 @@
         sudo PAT_TOKEN="{{ pat_token }}" \
         OWNER="{{ owner }}" \
         REPO="{{ repo }}" \
-        AZURE_RESOURCE_GROUP="rg-dashboard-demo" \
+        AZURE_RESOURCE_GROUP="rg-drishti-demo" \
         nohup python3 app.py > /tmp/dashboard.log 2>&1 & echo $! > /tmp/flask.pid
       args:
         executable: /bin/bash

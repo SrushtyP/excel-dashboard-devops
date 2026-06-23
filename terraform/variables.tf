@@ -5,7 +5,7 @@ variable "tenant_id" {}
 variable "admin_password" {}
 
 variable "resource_group_name" {
-  default = "rg-dashboard-demo"
+  default = "rg-drishti-demo"
 }
 
 variable "location" {
