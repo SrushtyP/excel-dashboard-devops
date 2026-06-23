@@ -36,6 +36,23 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: terraform init -reconfigure
 
+      - name: Import existing resource group if needed
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: |
+          RG_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-drishti-demo"
+          if ! terraform state show azurerm_resource_group.rg > /dev/null 2>&1; then
+            echo "Resource group not in state — importing..."
+            terraform import -var-file="terraform.tfvars" azurerm_resource_group.rg "$RG_ID"
+          else
+            echo "Resource group already in state — skipping import."
+          fi
+
       - name: Terraform Apply
         working-directory: terraform
         env:
