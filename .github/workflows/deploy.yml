@@ -52,6 +52,17 @@ jobs:
           else
             echo "Resource group already in state — skipping import."
           fi
+          # Remove stale shared networking resources from state if they exist
+          # (replaced by per-VM networking in separate regions)
+          for resource in \
+            azurerm_virtual_network.vnet \
+            azurerm_subnet.subnet \
+            azurerm_network_security_group.nsg; do
+            if terraform state show "$resource" > /dev/null 2>&1; then
+              echo "Removing stale state entry: $resource"
+              terraform state rm "$resource"
+            fi
+          done
 
       - name: Terraform Apply
         working-directory: terraform
