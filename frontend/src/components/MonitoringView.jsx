@@ -641,7 +641,7 @@ export default function MonitoringView() {
     network:  <NetworkIopsTab />,
     alerts:   <AlertsTab />,
   }
-// this is sample commit
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
 
