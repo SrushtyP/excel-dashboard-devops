@@ -31,7 +31,7 @@ variable "admin_username" {
 }
 
 variable "vm_size" {
-  default = "Standard_B1s"
+  default = "Standard_B2ats_v2"
 }
 
 # Set to true to provision vm-destroyed, false to destroy it
