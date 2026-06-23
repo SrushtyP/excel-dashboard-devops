@@ -8,7 +8,7 @@ KNOWN_ROLES = {
     'acdd72a7-3385-48ef-bd42-f606fba81ae7': 'Reader',
 }
 
-RESOURCE_GROUP = 'rg-dashboard-demo'
+RESOURCE_GROUP = 'rg-drishti-demo'
 
 def get_auth_client():
     config_path = os.path.join(os.path.dirname(__file__), '../inventory/azure_config.json')
