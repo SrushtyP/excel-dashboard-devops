@@ -9,7 +9,7 @@ const NAV = [
   { id: 'sec',     label: 'Sec', icon: '🔒', desc: 'Security'         },
   { id: 'gov',     label: 'Gov',      icon: '📋', desc: 'Governance'       },
 ]
-
+// Updating logo
 export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
   return (
     <aside className="w-[220px] flex-shrink-0 bg-nouryon-blue flex flex-col h-screen z-20 shadow-lg">
