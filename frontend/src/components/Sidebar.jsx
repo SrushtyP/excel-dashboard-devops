@@ -17,16 +17,26 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-            <span className="text-nouryon-blue font-bold text-lg leading-none">Cc</span>
+          {/* Nouryon Drishti logo */}
+          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0 p-1">
+            <svg viewBox="0 0 80 60" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+              {/* Eye outline */}
+              <path d="M40 10 C15 10 4 30 4 30 C4 30 15 50 40 50 C65 50 76 30 76 30 C76 30 65 10 40 10 Z"
+                fill="none" stroke="#1a3a6b" strokeWidth="2.5" />
+              {/* Teal circle */}
+              <circle cx="40" cy="30" r="13" fill="none" stroke="#00b4b4" strokeWidth="2.5" />
+              {/* N letter */}
+              <text x="40" y="36" textAnchor="middle" fontFamily="Arial, sans-serif"
+                fontWeight="bold" fontSize="14" fill="#1a3a6b">N</text>
+            </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-white font-bold text-[15px] leading-tight">ChemCore</p>
-            <p className="text-blue-200 text-[11px] leading-tight truncate">Digital Technology Platform</p>
+            <p className="text-white font-bold text-[15px] leading-tight">NOURYON</p>
+            <p className="text-blue-200 text-[11px] leading-tight tracking-widest">DRISHTI</p>
           </div>
         </div>
         <div className="mt-3 text-[10px] text-blue-200/70 uppercase tracking-widest font-semibold">
-          ChemCore International
+          Nouryon · Digital Technology Platform
         </div>
       </div>
 
