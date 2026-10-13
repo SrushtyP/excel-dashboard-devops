@@ -13,6 +13,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required secrets
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+          TFSTATE_RESOURCE_GROUP: ${{ secrets.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
+          VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
+        run: |
+          missing=0
+          for v in AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_STORAGE_KEY TFSTATE_RESOURCE_GROUP TFSTATE_STORAGE_ACCOUNT VM_PASSWORD; do
+            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret: $v"; missing=1; fi
+          done
+          exit $missing
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
