@@ -687,7 +687,7 @@ export default function FinOpsView({ datacenters }) {
                 <p className="font-bold mb-1">To enable live Azure Monitor logs:</p>
                 <ol className="space-y-1 list-decimal ml-4 text-[10px]">
                   <li>Add <code className="bg-white px-1 rounded border border-blue-200">azure-mgmt-monitor</code> to <code className="bg-white px-1 rounded border border-blue-200">requirements.txt</code></li>
-                  <li>Create a Log Analytics workspace in <code className="bg-white px-1 rounded border border-blue-200">rg-dashboard-demo</code></li>
+                  <li>Create a Log Analytics workspace in <code className="bg-white px-1 rounded border border-blue-200">drishtidemo</code></li>
                   <li>Link your VMs to the workspace under Diagnostic Settings</li>
                   <li>The <code className="bg-white px-1 rounded border border-blue-200">/api/monitor/logs</code> endpoint will then return real activity log entries</li>
                 </ol>

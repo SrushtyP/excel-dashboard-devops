@@ -5,7 +5,7 @@ variable "tenant_id" {}
 variable "admin_password" {}
 
 variable "resource_group_name" {
-  default = "rg-drishti-demo"
+  default = "drishtidemo"
 }
 
 # Resource group location (does not affect VM placement)

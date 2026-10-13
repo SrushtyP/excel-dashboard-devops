@@ -164,7 +164,7 @@ def get_vms():
         compute = ComputeManagementClient(cred, sub_id)
         inv = _load_inv()
         inv_map = {v['id']: v for v in inv.get('vms', [])}
-        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'rg-dashboard-demo')
+        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'drishtidemo')
 
         result = []
         for vm in compute.virtual_machines.list(rg):
@@ -481,7 +481,7 @@ def get_monitor_logs():
         from azure.mgmt.monitor import MonitorManagementClient
         cred, sub_id = _azure_credential()
         client = MonitorManagementClient(cred, sub_id)
-        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'rg-dashboard-demo')
+        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'drishtidemo')
         now   = datetime.utcnow()
         start = (now - timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ')
         end   = now.strftime('%Y-%m-%dT%H:%M:%SZ')

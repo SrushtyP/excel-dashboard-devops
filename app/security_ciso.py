@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 # ── Shared Azure helpers ──────────────────────────────────────────────────────
 
 def _rg():
-    return os.environ.get('AZURE_RESOURCE_GROUP', 'rg-drishti-demo')
+    return os.environ.get('AZURE_RESOURCE_GROUP', 'drishtidemo')
 
 
 def _now():
