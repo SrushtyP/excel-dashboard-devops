@@ -14,20 +14,40 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check required secrets
+        id: resolve_backend
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
-          TFSTATE_RESOURCE_GROUP: ${{ secrets.TFSTATE_RESOURCE_GROUP }}
-          TFSTATE_STORAGE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
+          TFSTATE_RESOURCE_GROUP_SECRET: ${{ secrets.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT_SECRET: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
+          AZURE_RESOURCE_GROUP_SECRET: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          AZURE_STORAGE_ACCOUNT_SECRET: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+          TFSTATE_RESOURCE_GROUP_VAR: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT_VAR: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          AZURE_RESOURCE_GROUP_VAR: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_STORAGE_ACCOUNT_VAR: ${{ vars.AZURE_STORAGE_ACCOUNT }}
           VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
         run: |
+          TFSTATE_RESOURCE_GROUP="${TFSTATE_RESOURCE_GROUP_SECRET:-${TFSTATE_RESOURCE_GROUP_VAR:-${AZURE_RESOURCE_GROUP_SECRET:-${AZURE_RESOURCE_GROUP_VAR:-drishtidemo}}}}"
+          TFSTATE_STORAGE_ACCOUNT="${TFSTATE_STORAGE_ACCOUNT_SECRET:-${TFSTATE_STORAGE_ACCOUNT_VAR:-${AZURE_STORAGE_ACCOUNT_SECRET:-${AZURE_STORAGE_ACCOUNT_VAR:-}}}}"
+
           missing=0
-          for v in AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_STORAGE_KEY TFSTATE_RESOURCE_GROUP TFSTATE_STORAGE_ACCOUNT VM_PASSWORD; do
+          for v in AZURE_SUBSCRIPTION_ID AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_STORAGE_KEY VM_PASSWORD; do
             if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret: $v"; missing=1; fi
           done
+          if [ -z "$TFSTATE_STORAGE_ACCOUNT" ]; then
+            echo "::error::Missing Terraform backend storage account. Set one of: TFSTATE_STORAGE_ACCOUNT (secret or variable) or AZURE_STORAGE_ACCOUNT (secret or variable)."
+            missing=1
+          fi
+          if [ -z "$TFSTATE_RESOURCE_GROUP" ]; then
+            echo "::error::Missing Terraform backend resource group. Set one of: TFSTATE_RESOURCE_GROUP/AZURE_RESOURCE_GROUP (secret or variable)."
+            missing=1
+          fi
+          echo "tfstate_resource_group=$TFSTATE_RESOURCE_GROUP" >> "$GITHUB_OUTPUT"
+          echo "tfstate_storage_account=$TFSTATE_STORAGE_ACCOUNT" >> "$GITHUB_OUTPUT"
           exit $missing
 
       - name: Setup Terraform
@@ -53,8 +73,8 @@ jobs:
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
           terraform init -reconfigure \
-            -backend-config="resource_group_name=${{ secrets.TFSTATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ secrets.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="resource_group_name=${{ steps.resolve_backend.outputs.tfstate_resource_group }}" \
+            -backend-config="storage_account_name=${{ steps.resolve_backend.outputs.tfstate_storage_account }}" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=dashboard.tfstate"
 
