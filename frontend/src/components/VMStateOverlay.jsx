@@ -141,7 +141,7 @@ export default function VMStateOverlay({ vm, targetState, onComplete }) {
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-[11px] font-mono" style={{ color:'#4a7ab5', letterSpacing:'0.1em' }}>
-                chemcore-im // state transition
+                drishti-im // state transition
               </p>
               <p className="text-[14px] font-semibold mt-0.5" style={{ color:'#1a4780' }}>
                 {vm.id}

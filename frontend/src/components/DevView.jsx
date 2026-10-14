@@ -435,7 +435,7 @@ function InfraView({ datacenters, setDatacenters }) {
             ) : (
               <>
                 <h1 className="text-[20px] font-bold text-gray-900">Infrastructure Overview</h1>
-                <p className="text-[12px] text-gray-500 mt-0.5">ChemCore International · Primary / Secondary / DR</p>
+                <p className="text-[12px] text-gray-500 mt-0.5">Drishti · Primary / Secondary / DR</p>
               </>
             )}
           </div>

@@ -649,7 +649,7 @@ export default function MonitoringView() {
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <h1 className="text-[20px] font-bold text-gray-900">Monitoring</h1>
         <p className="text-[12px] text-gray-500 mt-0.5">
-          ChemCore International · Nouryon IM Platform · 3 VMs · Azure Monitor
+          Drishti · Nouryon IM Platform · 3 VMs · Azure Monitor
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-// inventory.js — ChemCore International / Nouryon IM Platform
+// inventory.js — Drishti / Nouryon IM Platform
 // Business metadata only. Live state + costs come from /api/vms
 //
 // Three datacenters:

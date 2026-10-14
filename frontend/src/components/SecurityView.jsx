@@ -849,7 +849,7 @@ export default function SecurityView() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-200 px-6 pt-5 pb-0">
         <h1 className="text-[20px] font-bold text-gray-900 mb-1">Security</h1>
-        <p className="text-[12px] text-gray-400 mb-4">ChemCore International · Information Management Platform · 3 VMs</p>
+        <p className="text-[12px] text-gray-400 mb-4">Drishti · Information Management Platform · 3 VMs</p>
         <div className="flex gap-0 border-b border-gray-100 -mb-px">
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}

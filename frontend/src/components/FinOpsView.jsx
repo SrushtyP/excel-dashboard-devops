@@ -453,7 +453,7 @@ export default function FinOpsView({ datacenters }) {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-[20px] font-bold text-gray-900">FinOps — Cost Management</h1>
-            <p className="text-[12px] text-gray-500 mt-0.5">ChemCore International · Azure cloud spend · <strong>USD</strong></p>
+            <p className="text-[12px] text-gray-500 mt-0.5">Drishti · Azure cloud spend · <strong>USD</strong></p>
           </div>
           {cost && (
             <div className="flex items-center gap-1.5 text-[10px]" style={{color:cost.live?'#166534':'#6B7280'}}>

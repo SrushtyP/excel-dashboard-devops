@@ -15,18 +15,12 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
     <aside className="w-[220px] flex-shrink-0 bg-nouryon-blue flex flex-col h-screen z-20 shadow-lg">
 
       {/* Brand */}
-      <div className="px-5 pt-6 pb-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-            <span className="text-nouryon-blue font-bold text-lg leading-none">Cc</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-white font-bold text-[15px] leading-tight">ChemCore</p>
-            <p className="text-blue-200 text-[11px] leading-tight truncate">Digital Technology Platform</p>
-          </div>
+      <div className="px-4 pt-5 pb-4 border-b border-white/10">
+        <div className="rounded-lg bg-white p-1.5">
+          <img src="/drishti-logo.png" alt="Nouryon Drishti" className="w-full h-auto block" />
         </div>
         <div className="mt-3 text-[10px] text-blue-200/70 uppercase tracking-widest font-semibold">
-          ChemCore International
+          Digital Technology Platform
         </div>
       </div>
 
