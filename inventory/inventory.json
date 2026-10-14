@@ -43,6 +43,17 @@
         "monthly_inr": 744,
         "optimized_monthly_inr": 744,
         "savings_inr": 0
+      },
+      "tags": {
+        "Notification Email": "N/A",
+        "Application environment": "Production",
+        "Application number": "4725",
+        "Business criticality": "High",
+        "MaintenanceWindow": "2D_2DX",
+        "Kyndryl_Managed": "true",
+        "KyndrylPatching": "2D_2DX",
+        "KyndrylBackup": "D-1W-Enhanced",
+        "Info": "Owner: upendra.mishra@nouryon.com, Support Email: dl-in-nouryonsapbasbau@eviden.com"
       }
     },
     {
@@ -72,6 +83,17 @@
         "monthly_inr": 744,
         "optimized_monthly_inr": 269,
         "savings_inr": 475
+      },
+      "tags": {
+        "Notification Email": "N/A",
+        "Application environment": "Production",
+        "Application number": "4725",
+        "Kyndryl_Managed": "true",
+        "KyndrylPatching": "2D_2DX",
+        "KyndrylBackup": "D-1W-Enhanced",
+        "Info": "Owner: upendra.mishra@nouryon.com, Support Email: dl-in-nouryonsapbasbau@eviden.com",
+        "Bussiness criticality": "High",
+        "MaintenaceWindow": "2D_2DX"
       }
     },
     {

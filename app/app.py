@@ -227,6 +227,35 @@ def get_vms():
             return jsonify({'error': str(e2), 'vms': []}), 500
 
 
+# ── GET /api/vm-tags ──────────────────────────────────────────────────────────
+# Real Azure resource tags per VM (falls back to inventory.json "tags" if Azure is unreachable)
+@app.route('/api/vm-tags')
+def get_vm_tags():
+    inv = _load_inv()
+    inv_map = {v['id']: v for v in inv.get('vms', [])}
+    try:
+        from azure.mgmt.compute import ComputeManagementClient
+        cred, sub_id = _azure_credential()
+        compute = ComputeManagementClient(cred, sub_id)
+        rg = os.environ.get('AZURE_RESOURCE_GROUP', 'drishtidemo')
+        result = []
+        for vm in compute.virtual_machines.list(rg):
+            meta = inv_map.get(vm.name, {})
+            result.append({
+                'id': vm.name, 'alias': meta.get('alias', vm.name),
+                'size': vm.hardware_profile.vm_size if vm.hardware_profile else '',
+                'tags': dict(vm.tags or {}),
+            })
+        return jsonify({'vms': result, 'live': True})
+    except Exception as e:
+        result = [{
+            'id': v['id'], 'alias': v.get('alias', v['id']),
+            'size': v.get('specs', {}).get('vm_size', ''),
+            'tags': v.get('tags', {}),
+        } for v in inv.get('vms', []) if v.get('tags')]
+        return jsonify({'vms': result, 'live': False, 'error': str(e)})
+
+
 # ── GET /api/pipeline/runs ────────────────────────────────────────────────────
 @app.route('/api/pipeline/runs')
 def get_pipeline_runs():

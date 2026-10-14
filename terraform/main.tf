@@ -24,6 +24,31 @@ data "azurerm_resource_group" "rg" {
   name = var.resource_group_name
 }
 
+locals {
+  # Standard Nouryon tag set (keys/values as shown in the Azure portal Tags pane)
+  base_tags = {
+    "Notification Email"      = "N/A"
+    "Application environment" = "Production"
+    "Application number"      = "4725"
+    "Business criticality"    = "High"
+    "MaintenanceWindow"       = "2D_2DX"
+    "Kyndryl_Managed"         = "true"
+    "KyndrylPatching"         = "2D_2DX"
+    "KyndrylBackup"           = "D-1W-Enhanced"
+    "Info"                    = "Owner: upendra.mishra@nouryon.com, Support Email: dl-in-nouryonsapbasbau@eviden.com"
+  }
+
+  # DELIBERATE TEST DATA: vm-snoozed carries two misspelled tag keys so the Governance >
+  # Tag Compliance tab has something to flag. Remove this and use local.base_tags to fix.
+  snoozed_tags = merge(
+    { for k, v in local.base_tags : k => v if !contains(["Business criticality", "MaintenanceWindow"], k) },
+    {
+      "Bussiness criticality" = "High"
+      "MaintenaceWindow"      = "2D_2DX"
+    }
+  )
+}
+
 # ── VM-RUNNING — Central India ─────────────────────────────────────────────────
 
 resource "azurerm_virtual_network" "vnet_running" {
@@ -117,6 +142,7 @@ resource "azurerm_linux_virtual_machine" "vm_running" {
   admin_password                  = var.admin_password
   disable_password_authentication = false
   network_interface_ids           = [azurerm_network_interface.nic_running.id]
+  tags                            = local.base_tags
 
   os_disk {
     caching              = "ReadWrite"
@@ -224,6 +250,7 @@ resource "azurerm_linux_virtual_machine" "vm_snoozed" {
   admin_password                  = var.admin_password
   disable_password_authentication = false
   network_interface_ids           = [azurerm_network_interface.nic_snoozed.id]
+  tags                            = local.snoozed_tags
 
   lifecycle {
     ignore_changes = [size, os_disk]

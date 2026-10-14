@@ -1,15 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const REQUIRED_TAGS      = ['environment', 'contact', 'business_unit']
-const ALLOWED_ENV_VALUES = ['production', 'staging', 'dev', 'test', 'ephemeral']
-const TAG_MISSPELLINGS   = [
-  'enviroment', 'enviornment', 'environement',
-  'busines_unit', 'bussiness_unit',
-  'conatct', 'contcat',
+// Tag keys exactly as they appear on the Azure resources (spaces / casing matter)
+const REQUIRED_TAGS = [
+  'Notification Email', 'Application environment', 'Application number',
+  'Business criticality', 'MaintenanceWindow', 'Kyndryl_Managed',
+  'KyndrylPatching', 'KyndrylBackup',
 ]
+const OPTIONAL_TAGS = ['Info']
+const KNOWN_TAGS    = [...REQUIRED_TAGS, ...OPTIONAL_TAGS]
+const ALLOWED_VALUES = {
+  'Application environment': ['Production', 'Staging', 'Development', 'Test', 'QA'],
+  'Business criticality':    ['Low', 'Medium', 'High', 'Critical'],
+  'Kyndryl_Managed':         ['true', 'false'],
+}
 
 // ─── Mock data: VM Backups ────────────────────────────────────────────────────
 
@@ -169,40 +175,65 @@ const MOCK_CONTRACTS = [
   },
 ]
 
-// ─── Compliance logic (unchanged from original) ───────────────────────────────
+// ─── Compliance logic ─────────────────────────────────────────────────────────
+
+const norm = k => k.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+function editDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1))
+  return dp[a.length][b.length]
+}
+
+// A key that is not a known tag but is within 2 edits of one is treated as a misspelling
+function suggestKey(key) {
+  if (KNOWN_TAGS.includes(key)) return null
+  const n = norm(key)
+  let best = null
+  for (const known of KNOWN_TAGS) {
+    const d = editDistance(n, norm(known))
+    if (d <= 2 && (!best || d < best.d)) best = { known, d }
+  }
+  return best ? best.known : null
+}
 
 function computeCompliance(vms) {
   let compliant = 0
   const perType = {}
-  const invalidEnv = []
+  const invalidValues = []
   const caseIssues = []
   const missing = []
+  const misspelled = []
 
   vms.forEach(vm => {
-    const tags = {
-      environment:   vm.environment   || '',
-      contact:       vm.contact       || '',
-      business_unit: vm._unit         || '',
-    }
+    const tags = vm.tags || {}
+    const name = vm.id
 
-    const hasAll = REQUIRED_TAGS.every(k => tags[k] && tags[k].trim() !== '')
+    const missing_tags = REQUIRED_TAGS.filter(k => !tags[k] || String(tags[k]).trim() === '')
+    const hasAll = missing_tags.length === 0
     if (hasAll) compliant++
+    if (!hasAll) missing.push({ name, alias: vm.alias, missing: missing_tags })
 
-    const type = vm.specs?.vm_size || 'Unknown'
+    const type = vm.size || 'Unknown'
     if (!perType[type]) perType[type] = { total: 0, compliant: 0 }
     perType[type].total++
     if (hasAll) perType[type].compliant++
 
-    const envVal = tags.environment.toLowerCase()
-    if (envVal && !ALLOWED_ENV_VALUES.includes(envVal))
-      invalidEnv.push({ name: vm.name, value: tags.environment })
+    Object.entries(ALLOWED_VALUES).forEach(([key, allowed]) => {
+      const val = tags[key]
+      if (!val) return
+      const match = allowed.find(a => a.toLowerCase() === String(val).toLowerCase())
+      if (!match) invalidValues.push({ name, key, value: val, allowed })
+      else if (match !== val) caseIssues.push({ name, key, value: val, shouldBe: match })
+    })
 
-    if (tags.environment && tags.environment !== tags.environment.toLowerCase())
-      caseIssues.push({ name: vm.name, value: tags.environment })
-
-    const missing_tags = REQUIRED_TAGS.filter(k => !tags[k] || tags[k].trim() === '')
-    if (missing_tags.length > 0)
-      missing.push({ name: vm.name, alias: vm.alias, missing: missing_tags })
+    Object.keys(tags).forEach(key => {
+      const suggestion = suggestKey(key)
+      if (suggestion) misspelled.push({ name, key, suggestion })
+    })
   })
 
   const perTypeArr = Object.entries(perType).map(([type, v]) => ({
@@ -212,7 +243,7 @@ function computeCompliance(vms) {
     percent: Math.round((v.compliant / v.total) * 100),
   }))
 
-  return { total: vms.length, compliant, percent: vms.length ? Math.round((compliant / vms.length) * 100) : 0, perType: perTypeArr, invalidEnv, caseIssues, missing }
+  return { total: vms.length, compliant, percent: vms.length ? Math.round((compliant / vms.length) * 100) : 0, perType: perTypeArr, invalidValues, caseIssues, missing, misspelled }
 }
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
@@ -293,9 +324,52 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24))
 }
 
-// ─── Tab: Tag Compliance (original, preserved) ────────────────────────────────
+// ─── Tab: Tag Compliance ──────────────────────────────────────────────────────
 
-function TagComplianceTab({ vms }) {
+function TagChips({ tags }) {
+  const entries = Object.entries(tags || {})
+  if (!entries.length) return <p className="text-[12px] text-gray-400">No tags on this resource.</p>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([k, v]) => {
+        const bad = suggestKey(k)
+        return (
+          <span key={k}
+            className={`text-[12px] rounded-md border px-2.5 py-1 ${bad ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+            <span className={bad ? 'text-red-400' : 'text-gray-400'}>{k}</span>{' '}
+            <span className="text-gray-800 font-medium break-all">{v}</span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function IssueTable({ heads, rows, empty }) {
+  if (!rows.length) return <p className="px-5 py-4 text-[12px] text-gray-400">{empty}</p>
+  return (
+    <table className="w-full text-[12px]">
+      <thead><tr className="bg-gray-50">
+        {heads.map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
+      </tr></thead>
+      <tbody className="divide-y divide-gray-50">{rows}</tbody>
+    </table>
+  )
+}
+
+function TagComplianceTab() {
+  const [vms, setVms]     = useState(null)
+  const [live, setLive]   = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/vm-tags')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => { setVms(d.vms || []); setLive(!!d.live); if (d.error) setError(d.error) })
+      .catch(e => { setVms([]); setError(e.message) })
+  }, [])
+
+  if (!vms) return <p className="text-[12px] text-gray-400">Loading tags…</p>
   const stats = computeCompliance(vms)
 
   return (
@@ -305,10 +379,24 @@ function TagComplianceTab({ vms }) {
           <ScoreRing percent={stats.percent} />
           <div className="space-y-1">
             <p className="text-[22px] font-bold text-gray-900">{stats.compliant} / {stats.total} VMs compliant</p>
-            <p className="text-[12px] text-gray-500">
-              Required tags: <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">{REQUIRED_TAGS.join(', ')}</span>
-            </p>
+            <p className="text-[12px] text-gray-500">Required tags:</p>
+            <div className="flex flex-wrap gap-1">
+              {REQUIRED_TAGS.map(t => <span key={t} className="font-mono text-[11px] bg-gray-100 px-1.5 py-0.5 rounded">{t}</span>)}
+            </div>
+            <p className="text-[11px] text-gray-400">Optional: {OPTIONAL_TAGS.join(', ')}</p>
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Tags per VM">
+        <div className="divide-y divide-gray-50">
+          {vms.map(vm => (
+            <div key={vm.id} className="px-5 py-4">
+              <p className="text-[12px] font-bold text-gray-700 mb-2">🏷 TAGS <span className="font-mono font-normal text-gray-500 ml-1">{vm.id}</span></p>
+              <TagChips tags={vm.tags} />
+            </div>
+          ))}
+          {!vms.length && <p className="px-5 py-4 text-[12px] text-gray-400">No VMs returned.</p>}
         </div>
       </SectionCard>
 
@@ -327,79 +415,65 @@ function TagComplianceTab({ vms }) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Invalid Environment Tag Values" badge={stats.invalidEnv.length}>
-        {stats.invalidEnv.length === 0 ? (
-          <p className="px-5 py-4 text-[12px] text-gray-400">No invalid environment values found.</p>
-        ) : (
-          <table className="w-full text-[12px]">
-            <thead><tr className="bg-gray-50">
-              {['VM','Invalid Value','Allowed'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
-            </tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {stats.invalidEnv.map(r => (
-                <tr key={r.name}>
-                  <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
-                  <td className="px-5 py-2.5"><span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-mono">{r.value}</span></td>
-                  <td className="px-5 py-2.5 text-gray-400">{ALLOWED_ENV_VALUES.join(', ')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </SectionCard>
-
-      <SectionCard title="Case-Inconsistent Tag Values" badge={stats.caseIssues.length}>
-        {stats.caseIssues.length === 0 ? (
-          <p className="px-5 py-4 text-[12px] text-gray-400">All tag values are lowercase — no case issues.</p>
-        ) : (
-          <table className="w-full text-[12px]">
-            <thead><tr className="bg-gray-50">
-              {['VM','Current Value','Should Be'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
-            </tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {stats.caseIssues.map(r => (
-                <tr key={r.name}>
-                  <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
-                  <td className="px-5 py-2.5"><span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono">{r.value}</span></td>
-                  <td className="px-5 py-2.5 font-mono text-green-700">{r.value.toLowerCase()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <SectionCard title="Misspelled Tag Keys" badge={stats.misspelled.length}>
+        <IssueTable heads={['VM', 'Tag Key Found', 'Did You Mean']} empty="No misspelled tag keys found."
+          rows={stats.misspelled.map(r => (
+            <tr key={r.name + r.key}>
+              <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
+              <td className="px-5 py-2.5"><span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-mono">{r.key}</span></td>
+              <td className="px-5 py-2.5 font-mono text-green-700">{r.suggestion}</td>
+            </tr>
+          ))} />
       </SectionCard>
 
       <SectionCard title="Missing Required Tags" badge={stats.missing.length}>
-        {stats.missing.length === 0 ? (
-          <p className="px-5 py-4 text-[12px] text-gray-400">All VMs have the required tags.</p>
-        ) : (
-          <table className="w-full text-[12px]">
-            <thead><tr className="bg-gray-50">
-              {['VM','Alias','Missing'].map(h => <th key={h} className="px-5 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>)}
-            </tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {stats.missing.map(r => (
-                <tr key={r.name}>
-                  <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
-                  <td className="px-5 py-2.5 text-gray-500">{r.alias}</td>
-                  <td className="px-5 py-2.5">
-                    <div className="flex gap-1 flex-wrap">
-                      {r.missing.map(tag => <span key={tag} className="bg-red-100 text-red-700 text-[10px] font-mono px-1.5 py-0.5 rounded">{tag}</span>)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <IssueTable heads={['VM', 'Alias', 'Missing']} empty="All VMs have the required tags."
+          rows={stats.missing.map(r => (
+            <tr key={r.name}>
+              <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
+              <td className="px-5 py-2.5 text-gray-500">{r.alias}</td>
+              <td className="px-5 py-2.5">
+                <div className="flex gap-1 flex-wrap">
+                  {r.missing.map(tag => <span key={tag} className="bg-red-100 text-red-700 text-[10px] font-mono px-1.5 py-0.5 rounded">{tag}</span>)}
+                </div>
+              </td>
+            </tr>
+          ))} />
       </SectionCard>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
-        <p className="text-[11px] font-bold text-amber-700 mb-1">⚠ Tag Key Misspelling Detection</p>
-        <p className="text-[11px] text-amber-600">
-          When connected to Azure Resource Graph, this section will flag VMs using known misspellings such as:{' '}
-          <span className="font-mono">{TAG_MISSPELLINGS.join(', ')}</span>.
-          Currently showing local inventory data only.
+      <SectionCard title="Invalid Tag Values" badge={stats.invalidValues.length}>
+        <IssueTable heads={['VM', 'Tag', 'Invalid Value', 'Allowed']} empty="No invalid tag values found."
+          rows={stats.invalidValues.map(r => (
+            <tr key={r.name + r.key}>
+              <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
+              <td className="px-5 py-2.5 text-gray-600">{r.key}</td>
+              <td className="px-5 py-2.5"><span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-mono">{r.value}</span></td>
+              <td className="px-5 py-2.5 text-gray-400">{r.allowed.join(', ')}</td>
+            </tr>
+          ))} />
+      </SectionCard>
+
+      <SectionCard title="Case-Inconsistent Tag Values" badge={stats.caseIssues.length}>
+        <IssueTable heads={['VM', 'Tag', 'Current Value', 'Should Be']} empty="All tag values use the standard casing."
+          rows={stats.caseIssues.map(r => (
+            <tr key={r.name + r.key}>
+              <td className="px-5 py-2.5 font-mono text-gray-700">{r.name}</td>
+              <td className="px-5 py-2.5 text-gray-600">{r.key}</td>
+              <td className="px-5 py-2.5"><span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono">{r.value}</span></td>
+              <td className="px-5 py-2.5 font-mono text-green-700">{r.shouldBe}</td>
+            </tr>
+          ))} />
+      </SectionCard>
+
+      <div className={`rounded-xl px-5 py-4 border ${live ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+        <p className={`text-[11px] font-bold mb-1 ${live ? 'text-green-700' : 'text-amber-700'}`}>
+          {live ? '● Live Azure tags' : '⚠ Showing local inventory tags'}
+        </p>
+        <p className={`text-[11px] ${live ? 'text-green-600' : 'text-amber-600'}`}>
+          {live
+            ? 'Tags are read directly from the Azure VM resources.'
+            : `Azure was not reachable, so tags come from inventory.json.${error ? ` (${error})` : ''}`}
+          {' '}A key that is not a known tag but is within 2 characters of one is flagged as a misspelling.
         </p>
       </div>
     </div>
@@ -720,7 +794,7 @@ export default function GovernanceView({ datacenters }) {
       <div className="flex-1 p-6 max-w-6xl">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'tags'      && <TagComplianceTab vms={vms} />}
+            {activeTab === 'tags'      && <TagComplianceTab />}
             {activeTab === 'backups'   && <BackupsTab />}
             {activeTab === 'contracts' && <ContractsTab />}
           </motion.div>
