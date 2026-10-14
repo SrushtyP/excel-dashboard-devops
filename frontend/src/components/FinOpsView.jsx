@@ -350,9 +350,9 @@ function ResizeCalculator() {
                     : <div className="font-bold text-red-600">📉 +${Math.abs(saving).toFixed(2)}/mo additional cost (+{Math.abs(pct)}%)</div>
                 })()}
               </div>
-              <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
+              {/* <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
                 ℹ To apply: update <code className="bg-gray-100 px-1 rounded">variable "vm_size"</code> default in <code className="bg-gray-100 px-1 rounded">terraform/variables.tf</code> and push to <code className="bg-gray-100 px-1 rounded">main</code>
-              </p>
+              </p> */}
               <div className="flex justify-end mt-4">
                 <button onClick={()=>setSelected(null)}
                   className="px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white"
