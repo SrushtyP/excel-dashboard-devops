@@ -339,8 +339,17 @@ function KpiCard({ label, value, sub, accent, delay=0, live=false }) {
 function mergeAzureStates(datacenters, azureVms) {
   if (!azureVms) return datacenters
   const stateMap = Object.fromEntries(azureVms.map(v => [v.id, v]))
-  return datacenters.map(dc => ({
+  return datacenters.map(dc => {
+    // Region comes from the live Azure VMs in this datacenter (not hardcoded)
+    const liveWithRegion = dc.racks.flatMap(r => r.vms).map(v => stateMap[v.id]).filter(v => v?.location)
+    const regionOverride = liveWithRegion.length ? {
+      region:   liveWithRegion[0].location,
+      location: liveWithRegion[0].regionDisplay || liveWithRegion[0].location,
+      name:     dc.name.replace(/—.*$/, '— ' + (liveWithRegion[0].regionDisplay || liveWithRegion[0].location)),
+    } : {}
+    return {
     ...dc,
+    ...regionOverride,
     racks: dc.racks.map(rack => ({
       ...rack,
       vms: rack.vms.map(vm => {
@@ -353,7 +362,8 @@ function mergeAzureStates(datacenters, azureVms) {
         }
       }),
     })),
-  }))
+    }
+  })
 }
 
 // ─── Infrastructure sub-view ──────────────────────────────────────────────────
@@ -498,7 +508,8 @@ function InfraView({ datacenters, setDatacenters }) {
                 </div>
               </div>
 
-              {/* Datacenter role sections */}
+              {/* Datacenter role sections — side by side on large screens */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               {[
                 { role: 'Primary',            accent: '#1A4780', ids: ['dc-primary'],   desc: 'Live production workloads — real Azure VMs' },
                 { role: 'Secondary',          accent: '#059669', ids: ['dc-secondary'], desc: 'Failover & load sharing — Cape Town' },
@@ -511,8 +522,8 @@ function InfraView({ datacenters, setDatacenters }) {
                 )
                 const allSectionDcs = [...sectionDcs, ...(section.role === 'Primary' ? extraDcs : [])]
                 return (
-                  <div key={section.role} className="mb-6">
-                    <div className="flex items-center gap-3 mb-3">
+                  <div key={section.role} className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                       <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border"
                         style={{ color: section.accent, borderColor: section.accent, background: section.accent + '11' }}>
                         {section.role}
@@ -529,7 +540,7 @@ function InfraView({ datacenters, setDatacenters }) {
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 gap-5">
                       <AnimatePresence>
                         {allSectionDcs.map(dc => (
                           <DatacenterCard key={dc.id} dc={dc} isSelected={false}
@@ -542,6 +553,7 @@ function InfraView({ datacenters, setDatacenters }) {
                   </div>
                 )
               })}
+              </div>
             </motion.div>
           )}
 

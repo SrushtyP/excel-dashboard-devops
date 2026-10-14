@@ -113,6 +113,21 @@ def _dur(s, e):
         return None
 
 
+def _region_display(loc):
+    """'koreacentral' -> 'Korea Central' (uses a small map, falls back to title-casing)."""
+    names = {
+        'southafricanorth': 'South Africa North', 'southafricawest': 'South Africa West',
+        'centralindia': 'Central India', 'southindia': 'South India', 'westindia': 'West India',
+        'koreacentral': 'Korea Central', 'koreasouth': 'Korea South',
+        'southeastasia': 'Southeast Asia', 'eastasia': 'East Asia',
+        'westeurope': 'West Europe', 'northeurope': 'North Europe',
+        'eastus': 'East US', 'eastus2': 'East US 2', 'westus': 'West US', 'westus2': 'West US 2',
+        'uksouth': 'UK South', 'japaneast': 'Japan East', 'australiaeast': 'Australia East',
+    }
+    loc = (loc or '').lower()
+    return names.get(loc, loc)
+
+
 def _inv_fallback(error_msg):
     inv = _load_inv()
     vms = []
@@ -135,6 +150,8 @@ def _inv_fallback(error_msg):
             'contact': v.get('contact', ''), 'unit': v.get('business_unit', ''),
             'environment': v.get('environment', ''), 'priority': v.get('priority', ''),
             'businessNeed': v.get('business_need', ''), 'snooze': None, 'uptime': '—',
+            'location': v.get('location', ''),
+            'regionDisplay': v.get('region_display') or _region_display(v.get('location')),
         })
     return jsonify({'vms': vms, 'synced': datetime.utcnow().isoformat(),
                     'live': False, 'error': error_msg})
@@ -197,6 +214,8 @@ def get_vms():
                 'contact': meta.get('contact', ''), 'unit': meta.get('business_unit', ''),
                 'environment': meta.get('environment', ''), 'priority': meta.get('priority', ''),
                 'businessNeed': meta.get('business_need', ''), 'snooze': None, 'uptime': '—',
+                'location': vm.location,                      # real Azure region of the VM
+                'regionDisplay': _region_display(vm.location),
             })
         return jsonify({'vms': result, 'synced': datetime.utcnow().isoformat(), 'live': True})
     except ImportError:
