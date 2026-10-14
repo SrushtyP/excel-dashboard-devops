@@ -16,11 +16,17 @@ export default function Sidebar({ activeNav, onNav, pendingCount = 0 }) {
 
       {/* Brand */}
       <div className="px-4 pt-5 pb-4 border-b border-white/10">
-        <div className="w-11 rounded-lg bg-white p-1.5">
-          <img src="/drishti-logo.png" alt="Nouryon Drishti" className="w-10 h-auto block" />
+        <div className="flex items-center gap-3">
+          <div className="w-11 flex-shrink-0 rounded-lg bg-white p-1.5">
+            <img src="/drishti-logo.png" alt="Nouryon Drishti" className="w-10 h-auto block" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-white font-bold text-[15px] leading-tight">Drishti</p>
+            <p className="text-blue-200 text-[11px] leading-tight truncate">Digital Technology Platform</p>
+          </div>
         </div>
         <div className="mt-3 text-[10px] text-blue-200/70 uppercase tracking-widest font-semibold">
-          Digital Technology Platform
+          Nouryon Drishti
         </div>
       </div>
 
