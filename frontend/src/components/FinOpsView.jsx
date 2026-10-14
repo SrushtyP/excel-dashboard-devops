@@ -204,6 +204,13 @@ function ResizeCalculator() {
     }
   }
 
+  useEffect(() => {
+    if (!selected) return
+    const onKey = e => { if (e.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
+
   const curMonthly = CURRENT_PRICE * 730
 
   return (
@@ -314,29 +321,47 @@ function ResizeCalculator() {
         </div>
       )}
 
-      {/* Resize impact summary */}
-      {selected && (
-        <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
-          className="mt-4 p-4 rounded-xl border"
-          style={{background:'#F0FDF4',borderColor:'#BBF7D0'}}>
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-700 mb-3">📊 Resize Impact Summary</p>
-          <div className="flex flex-wrap gap-5 text-[12px]">
-            <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.armSkuName || selected.skuName}</strong></div>
-            <div><span className="text-gray-500">New cost:</span> <strong>${selected.retailPrice.toFixed(4)}/hr · ${(selected.retailPrice*730).toFixed(2)}/mo</strong></div>
-            <div><span className="text-gray-500">Current:</span> ${CURRENT_PRICE.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</div>
-            {(() => {
-              const saving = curMonthly - selected.retailPrice*730
-              const pct    = Math.round((saving/curMonthly)*100)
-              return saving >= 0
-                ? <div className="font-bold text-green-700">📈 Save ${saving.toFixed(2)}/mo · ${(saving*12).toFixed(2)}/yr ({pct}% cheaper)</div>
-                : <div className="font-bold text-red-600">📉 +${Math.abs(saving).toFixed(2)}/mo additional cost (+{Math.abs(pct)}%)</div>
-            })()}
-          </div>
-          <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
-            ℹ To apply: update <code className="bg-gray-100 px-1 rounded">variable "vm_size"</code> default in <code className="bg-gray-100 px-1 rounded">terraform/variables.tf</code> and push to <code className="bg-gray-100 px-1 rounded">main</code>
-          </p>
-        </motion.div>
-      )}
+      {/* Resize impact summary — popup */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div key="resize-modal"
+            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{background:'rgba(17,24,39,0.5)'}}
+            onClick={()=>setSelected(null)}>
+            <motion.div
+              initial={{opacity:0,scale:0.95,y:8}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95}}
+              role="dialog" aria-modal="true" aria-label="Resize Impact Summary"
+              className="w-full max-w-lg rounded-xl border shadow-xl p-5 relative"
+              style={{background:'#F0FDF4',borderColor:'#BBF7D0'}}
+              onClick={e=>e.stopPropagation()}>
+              <button onClick={()=>setSelected(null)} aria-label="Close"
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-[18px] leading-none">×</button>
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-700 mb-3">📊 Resize Impact Summary</p>
+              <div className="flex flex-col gap-2 text-[12px]">
+                <div><span className="text-gray-500">Selected:</span> <strong className="text-blue-700">{selected.armSkuName || selected.skuName}</strong></div>
+                <div><span className="text-gray-500">New cost:</span> <strong>${selected.retailPrice.toFixed(4)}/hr · ${(selected.retailPrice*730).toFixed(2)}/mo</strong></div>
+                <div><span className="text-gray-500">Current:</span> ${CURRENT_PRICE.toFixed(4)}/hr · ${curMonthly.toFixed(2)}/mo</div>
+                {(() => {
+                  const saving = curMonthly - selected.retailPrice*730
+                  const pct    = Math.round((saving/curMonthly)*100)
+                  return saving >= 0
+                    ? <div className="font-bold text-green-700">📈 Save ${saving.toFixed(2)}/mo · ${(saving*12).toFixed(2)}/yr ({pct}% cheaper)</div>
+                    : <div className="font-bold text-red-600">📉 +${Math.abs(saving).toFixed(2)}/mo additional cost (+{Math.abs(pct)}%)</div>
+                })()}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-3 p-2 bg-white rounded border border-gray-100">
+                ℹ To apply: update <code className="bg-gray-100 px-1 rounded">variable "vm_size"</code> default in <code className="bg-gray-100 px-1 rounded">terraform/variables.tf</code> and push to <code className="bg-gray-100 px-1 rounded">main</code>
+              </p>
+              <div className="flex justify-end mt-4">
+                <button onClick={()=>setSelected(null)}
+                  className="px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white"
+                  style={{background:'#1A4780'}}>Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!items.length && !loading && !error && (
         <p className="text-[11px] text-gray-400 text-center py-6">
