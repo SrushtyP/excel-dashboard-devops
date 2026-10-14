@@ -15,7 +15,8 @@ variable "location" {
 
 # Per-VM region assignments
 variable "location_running" {
-  default = "centralindia"
+  # centralindia returned AllocationFailed for Standard_B2ats_v2; koreacentral has capacity
+  default = "koreacentral"
 }
 
 variable "location_snoozed" {
